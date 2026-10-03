@@ -5,16 +5,18 @@ chrome.action.onClicked.addListener(tab=>{if(C.articleUrl(tab.url))chrome.tabs.s
 const tabs=new Map();
 chrome.runtime.onConnect.addListener(ui=>{
  const sender=ui.sender;
- if(ui.name!=='longtalk-ui'||!sender?.tab?.id||sender.frameId!==0||!C.articleUrl(sender.url)){ui.disconnect();return;}
+ if(ui.name!=='longtalk-ui'||!sender?.tab?.id||sender.frameId!==0||!C.officialPage(sender.url)){ui.disconnect();return;}
+ // sender.url may remain the initial document URL after the site navigates with pushState.
+ // Trust only our top-frame content script on the official origin; validate each article payload below.
  const tabId=sender.tab.id;tabs.get(tabId)?.();
  let native=null,job=null,closed=false,operation=0;
  const post=m=>{if(!closed)try{ui.postMessage(m);}catch{}};
- const stop=()=>{operation++;job=null;if(native){try{native.postMessage({type:'cancel'});native.disconnect();}catch{}native=null;}};
+ const stop=()=>{operation++;job=null;if(native){const current=native;native=null;try{current.postMessage({type:'cancel'});current.disconnect();}catch{}}};
  const cleanup=()=>{closed=true;stop();if(tabs.get(tabId)===cleanup)tabs.delete(tabId);};tabs.set(tabId,cleanup);ui.onDisconnect.addListener(cleanup);
  function connect(){
   if(native)return native;
   const port=chrome.runtime.connectNative(HOST);native=port;
-  port.onDisconnect.addListener(()=>{const error=chrome.runtime.lastError;if(native!==port)return;native=null;if(job){job=null;post({type:'error',message:'本机连接中断，请检查连接程序和 Codex 后重试。'});}else if(error)post({type:'connection',ready:false,message:'尚未连接本机程序。请运行安装包中的 install-macos.command。'});});
+  port.onDisconnect.addListener(()=>{const error=chrome.runtime.lastError;if(native!==port)return;native=null;const interrupted=!!job;job=null;post({type:'connection',ready:false,message:interrupted?'本机连接中断，生成已停止。请重新连接后重试。':error?'尚未连接本机程序，请检查安装后重新连接。':'本机连接已断开，请重新连接。'});});
   port.onMessage.addListener(async m=>{
    if(native!==port||closed)return;
    if(m.type==='hello'){post({type:'connection',ready:m.ready===true,message:m.ready?'本机 Codex 已连接':'未找到 Codex，请先安装并登录'});return;}
