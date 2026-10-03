@@ -2,6 +2,7 @@
 'use strict';
 const VERSION='1', DEFAULT_PROFILE='有新观点、有具体案例，能指导行动';
 function articleUrl(raw){try{const u=new URL(raw),id=u.searchParams.get('id');return u.origin==='https://www.dedao.cn'&&u.pathname==='/course/article'&&/^[A-Za-z0-9]{8,100}$/.test(id||'')?`${u.origin}${u.pathname}?id=${id}`:'';}catch{return '';}}
+function articleTitle(title){return typeof title==='string'&&title.endsWith(' - 得到APP')?title.slice(0,-' - 得到APP'.length).trim():'';}
 function extract(editor){
  if(!editor)throw Error('尚未找到文字稿，请等正文加载后重试。');
  const blocks=[...editor.children], text=e=>(e.innerText||e.textContent||'').trim();
@@ -33,6 +34,6 @@ function validateResult(r,paragraphs){
 }
 async function digest(value){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 async function keys(account,s){if(typeof account!=='string'||!account||account.length>160)throw Error('请先登录得到账号');const group=await digest(account);return {group,key:`summary:${group}:${await digest(JSON.stringify([VERSION,s]))}`};}
-const api={VERSION,DEFAULT_PROFILE,articleUrl,extract,source,validateResult,digest,keys};
+const api={VERSION,DEFAULT_PROFILE,articleUrl,articleTitle,extract,source,validateResult,digest,keys};
 if(typeof module!=='undefined')module.exports=api;else root.LongtalkCore=Object.freeze(api);
 })(globalThis);

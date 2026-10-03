@@ -34,10 +34,15 @@ function connect(){if(port)return;port=chrome.runtime.connect({name:'longtalk-ui
   catch(e){hasResult=false;$('.result').replaceChildren();status(e.message,true);}
  }
 });port.onDisconnect.addListener(()=>{if(port!==current)return;port=null;ready=false;busy(false);$('.connection').textContent='连接已断开，请重新打开速览或刷新网页';});port.postMessage({type:'hello'});}
+async function readTitle(mark){
+ const deadline=Date.now()+8000;
+ while(mark===epoch){const title=C.articleTitle(document.title);if(title)return title;if(Date.now()>=deadline)throw Error('文章信息尚未加载完成，请稍后点重读文字稿。');await new Promise(resolve=>setTimeout(resolve,100));}
+ return '';
+}
 async function prepare(){const mark=++epoch;port?.disconnect();port=null;ready=false;source=null;hasResult=false;$('.result').replaceChildren();$('.clear').hidden=true;$('.generate').textContent='生成速览';busy(false);status('正在读取本期文字稿…');
  try{const id=await context();if(mark!==epoch)return;account=id;const {paragraphs,nodes:elements,size}=C.extract(document.querySelector('.article-body .editor-show'));nodes=elements;
  const pref=(await chrome.storage.local.get(`preference:${await C.digest(account)}`));if(mark!==epoch)return;$('textarea').value=pref[Object.keys(pref)[0]]||C.DEFAULT_PROFILE;
- source=C.source({url:location.href,title:document.title.replace(/ - 得到APP$/,''),profile:$('textarea').value.trim()||C.DEFAULT_PROFILE,paragraphs});$('.source').textContent=source.title;const seconds=document.querySelector('video')?.duration;$('.meta').textContent=`${paragraphs.length} 段 · 约 ${(size/10000).toFixed(1)} 万字${Number.isFinite(seconds)?` · 视频约 ${Math.round(seconds/60)} 分钟`:''}`;connect();busy(false);port.postMessage({type:'lookup',account,source});
+ const title=await readTitle(mark);if(mark!==epoch)return;source=C.source({url:location.href,title,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE,paragraphs});$('.source').textContent=source.title;const seconds=document.querySelector('video')?.duration;$('.meta').textContent=`${paragraphs.length} 段 · 约 ${(size/10000).toFixed(1)} 万字${Number.isFinite(seconds)?` · 视频约 ${Math.round(seconds/60)} 分钟`:''}`;connect();busy(false);port.postMessage({type:'lookup',account,source});
  }catch(e){if(mark!==epoch)return;$('.source').textContent='当前页面';$('.meta').textContent='';status(e.message,true);busy(false);}
 }
 async function open(){shown=true;$('.panel').hidden=false;$('.launch').hidden=true;$('.launch').setAttribute('aria-expanded','true');if(running)return;await prepare();}

@@ -9,3 +9,5 @@ test('missing, short, duplicate and oversized transcripts are rejected',()=>{ass
 test('summaries require all dimensions and real paragraph references',()=>{assert.equal(C.validateResult(result(),source().paragraphs).points.length,5);const r=result();r.points[0].evidence=['P9999'];assert.throws(()=>C.validateResult(r,source().paragraphs));r.points[0].evidence=['P0001'];r.dimensions[0].name='行动指导';assert.throws(()=>C.validateResult(r,source().paragraphs));});
 test('cache identity changes with account, text and user preferences',async()=>{const s=source(),a=await C.keys('A',s);assert.notEqual(a.key,(await C.keys('B',s)).key);assert.notEqual(a.key,(await C.keys('A',{...s,profile:'商业案例'})).key);assert.notEqual(a.key,(await C.keys('A',{...s,paragraphs:[...s.paragraphs,paragraph('P0006')]})).key);assert.equal(a.key,(await C.keys('A',s)).key);assert.ok(!a.key.includes('正文内容'));});
 module.exports={source,result};
+
+test('article title excludes the initial site title before article metadata loads',()=>{assert.equal(C.articleTitle('得到APP - 知识就是力量，知识就在得到'),'');assert.equal(C.articleTitle('68｜本期长谈 - 得到APP'),'68｜本期长谈');assert.equal(C.articleTitle(undefined),'');});
