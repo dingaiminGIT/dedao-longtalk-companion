@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "得到长谈速览",
+  "version": "0.1.0",
+  "description": "用本机 Codex 整理长谈的观点、案例和行动建议，快速筛选并回看原文。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxUGLfnPdgbKYi1rwGXwX1Zno9gDY2ktdV92lRFdzwPQBE9zgRPk1qhhXBwfW/xznPBehj4VD0FgFd1XjoeB0TzyqwRSy05yFkwtC01bu/ZD7e1by1zEb3pHhcnqbcw9qZwObr2ukjp0V7hbDT0fEGFHMKL63s7bdkfHRsyULTXdwaybct4B/37sfz/HQZeLXude8BdbtzJYZrto7UhAI+B9/UVGAvGEc5kT4bnL33hXdzjzj46pPpTLQs5CR0hVGwvr3G3z9YmIHxT6hCy1Ou+NTRQG8vIg3NuAxlQuKHC03mVsh+jMc4yhyWLLqWXWXiR4/utCCklgTx9P+afC+8QIDAQAB",
+  "permissions": [
+    "storage",
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "打开长谈速览"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.dedao.cn/*"
+      ],
+      "js": [
+        "core.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
