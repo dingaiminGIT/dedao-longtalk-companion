@@ -2,7 +2,7 @@ import importlib.util,io,json,os,struct,sys,tempfile,time,unittest
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('host',Path(__file__).resolve().parents[1]/'native/host.py');h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
 def source():return {'url':'https://www.dedao.cn/course/article?id=ExampleArticle1234','title':'测试长谈','profile':'观点、案例和行动','paragraphs':[{'id':f'P{i:04d}','text':'测试正文'*35} for i in range(1,6)]}
-def result():return {'summary':'摘要','verdict':'精选段落','reason':'理由','dimensions':[{'name':x,'level':'一般','reason':'依据'} for x in ['观点启发','具体案例','行动指导']],'points':[{'insight':'观点','speaker':'嘉宾','example':'案例','action':'尝试','actionOrigin':'由观点延伸','evidence':['P0001']} for _ in range(5)],'limitations':['基于文字稿']}
+def result():return {'summary':'摘要','verdict':'精选段落','reason':'理由','dimensions':[{'name':x,'level':'一般','reason':'依据'} for x in ['观点启发','具体案例','行动指导']],'points':[{'insight':'观点','speaker':'嘉宾','reasoning':'问题背景与论证过程','boundary':'适用范围与局限','example':'案例','action':'尝试','actionOrigin':'由观点延伸','evidence':['P0001']} for _ in range(5)],'limitations':['基于文字稿']}
 class Tests(unittest.TestCase):
  def test_source_validation(self):
   self.assertEqual(h.validate_source(source())['title'],'测试长谈')
@@ -17,6 +17,15 @@ class Tests(unittest.TestCase):
   with self.assertRaises(ValueError):h.validate_result(r,source())
   r=result();r['injected']='unexpected'
   with self.assertRaises(ValueError):h.validate_result(r,source())
+ def test_detailed_schema_requires_reasoning_and_boundary(self):
+  for count in [5,8]:
+   r=result();r['points']=[dict(r['points'][0]) for _ in range(count)];h.validate_result(r,source())
+  for field in ['reasoning','boundary']:
+   r=result();del r['points'][0][field]
+   with self.assertRaises(ValueError):h.validate_result(r,source())
+  for count in [4,9]:
+   r=result();r['points']=[dict(r['points'][0]) for _ in range(count)]
+   with self.assertRaises(ValueError):h.validate_result(r,source())
  def test_fixed_command_no_source_as_shell(self):
   cmd=h.command('/bin/codex',Path('/tmp/test'))
   self.assertEqual(cmd[0],'/bin/codex');self.assertIn('read-only',cmd);self.assertIn('features.shell_tool=false',cmd);self.assertIn('features.code_mode_host=false',cmd);self.assertIn('--ignore-user-config',cmd);self.assertEqual(cmd[-1],'-')

@@ -1,6 +1,6 @@
 (function(root){
 'use strict';
-const VERSION='1', DEFAULT_PROFILE='有新观点、有具体案例，能指导行动';
+const VERSION='2', DEFAULT_PROFILE='有新观点、有具体案例，能指导行动';
 function articleUrl(raw){try{const u=new URL(raw),id=u.searchParams.get('id');return u.origin==='https://www.dedao.cn'&&u.pathname==='/course/article'&&/^[A-Za-z0-9]{8,100}$/.test(id||'')?`${u.origin}${u.pathname}?id=${id}`:'';}catch{return '';}}
 function officialPage(raw){try{return new URL(raw).origin==='https://www.dedao.cn';}catch{return false;}}
 function supportedPage(url,editor){return !!articleUrl(url)&&!!editor&&[...editor.children].some(e=>e.classList.contains('tag')&&['全文稿','文字稿'].includes((e.innerText||e.textContent||'').trim()));}
@@ -28,11 +28,11 @@ function source(value){
 }
 function validateResult(r,paragraphs){
  const text=x=>typeof x==='string'&&x.length>0&&x.length<=1000;
- if(!r||!text(r.summary)||!text(r.reason)||!['精选段落','完整观看','暂时跳过'].includes(r.verdict)||!Array.isArray(r.dimensions)||r.dimensions.length!==3||!Array.isArray(r.points)||r.points.length!==5||!Array.isArray(r.limitations)||r.limitations.length>8||!r.limitations.every(text))throw Error('摘要结构不完整，请重新生成');
+ if(!r||!text(r.summary)||!text(r.reason)||!['精选段落','完整观看','暂时跳过'].includes(r.verdict)||!Array.isArray(r.dimensions)||r.dimensions.length!==3||!Array.isArray(r.points)||(r.points.length<5||r.points.length>8)||!Array.isArray(r.limitations)||r.limitations.length>8||!r.limitations.every(text))throw Error('摘要结构不完整，请重新生成');
  const names=['观点启发','具体案例','行动指导'];
  if(new Set(r.dimensions.map(x=>x.name)).size!==3||r.dimensions.some(x=>!names.includes(x.name)||!['较强','一般','较弱'].includes(x.level)||!text(x.reason)))throw Error('摘要维度异常');
  const ids=new Set(paragraphs.map(p=>p.id));
- if(r.points.some(x=>![x.insight,x.speaker,x.example,x.action].every(text)||!['嘉宾建议','由观点延伸','无明确行动'].includes(x.actionOrigin)||!Array.isArray(x.evidence)||x.evidence.length<1||x.evidence.length>3||x.evidence.some(id=>!ids.has(id))))throw Error('原文引用无效，请重新生成');
+ if(r.points.some(x=>![x.insight,x.speaker,x.reasoning,x.example,x.action,x.boundary].every(text)||!['嘉宾建议','由观点延伸','无明确行动'].includes(x.actionOrigin)||!Array.isArray(x.evidence)||x.evidence.length<1||x.evidence.length>4||x.evidence.some(id=>!ids.has(id))))throw Error('原文引用无效，请重新生成');
  return r;
 }
 async function digest(value){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}

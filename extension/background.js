@@ -19,7 +19,7 @@ chrome.runtime.onConnect.addListener(ui=>{
   port.onDisconnect.addListener(()=>{const error=chrome.runtime.lastError;if(native!==port)return;native=null;const interrupted=!!job;job=null;post({type:'connection',ready:false,message:interrupted?'本机连接中断，生成已停止。请重新连接后重试。':error?'尚未连接本机程序，请检查安装后重新连接。':'本机连接已断开，请重新连接。'});});
   port.onMessage.addListener(async m=>{
    if(native!==port||closed)return;
-   if(m.type==='hello'){post({type:'connection',ready:m.ready===true,message:m.ready?'本机 Codex 已连接':'未找到 Codex，请先安装并登录'});return;}
+   if(m.type==='hello'){const compatible=m.resultVersion===C.VERSION;post({type:'connection',ready:m.ready===true&&compatible,message:!compatible?'本机连接程序需要更新，请运行新版安装器后重新连接。':m.ready?'本机 Codex 已连接':'未找到 Codex，请先安装并登录'});return;}
    const task=job;if(!task||m.id!==task.id)return;
    if(m.type==='progress'){post({type:'progress',message:'Codex 正在阅读全文并整理重点…'});return;}
    if(m.type==='error'||m.type==='cancelled'){job=null;post(m);return;}
