@@ -19,6 +19,7 @@ root.innerHTML=`<style>
 </section>`;document.documentElement.append(host);
 const $=s=>root.querySelector(s);$('textarea').value=C.DEFAULT_PROFILE;
 let port=null,account='',source=null,nodes=[],running=false,ready=false,shown=false,route=location.href,epoch=0,start=0,timer=null,hasResult=false,connectionState='idle',available=false,phase='正在分析全文';
+async function displayStorage(operation,key,value){const response=await chrome.runtime.sendMessage({type:'public-storage',operation,key,value});if(!response||response.error)throw Error(response?.error||'扩展连接中断，请刷新网页');return response.value;}
 function supported(){return C.supportedPage(location.href,document.querySelector('.article-body .editor-show'));}
 function dropPort(){const previous=port;port=null;previous?.disconnect();}
 function disconnected(message,canReconnect=true){ready=false;connectionState='failed';$('.connection').hidden=true;$('.setup').hidden=!canReconnect;busy(false);status(message,true);}
@@ -50,7 +51,7 @@ async function readTitle(mark){
 }
 async function prepare(){$('.retry-source').hidden=true;const mark=++epoch;dropPort();ready=false;connectionState='idle';$('.connection').hidden=true;$('.setup').hidden=true;$('.source').textContent='';$('.meta').textContent='';source=null;hasResult=false;$('.result').replaceChildren();$('.clear').hidden=true;$('.generate').textContent='生成速览';busy(false);status('正在读取本期文字稿…');
  try{const id=await context();if(mark!==epoch)return;account=id;const {paragraphs,nodes:elements,size}=C.extract(document.querySelector('.article-body .editor-show'));nodes=elements;
- const pref=(await chrome.storage.local.get(`preference:${await C.digest(account)}`));if(mark!==epoch)return;$('textarea').value=pref[Object.keys(pref)[0]]||C.DEFAULT_PROFILE;
+ const pref=await displayStorage('get',`preference:${await C.digest(account)}`);if(mark!==epoch)return;$('textarea').value=pref||C.DEFAULT_PROFILE;
  const title=await readTitle(mark);if(mark!==epoch)return;source=C.source({url:location.href,title,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE,paragraphs});$('.source').textContent=source.title;const seconds=document.querySelector('video')?.duration;$('.meta').textContent=`${paragraphs.length} 段 · 约 ${(size/10000).toFixed(1)} 万字${Number.isFinite(seconds)?` · 视频约 ${Math.round(seconds/60)} 分钟`:''}`;connect();busy(false);port.postMessage({type:'lookup',account,source});
  }catch(e){if(mark!==epoch)return;$('.source').textContent='当前页面';$('.meta').textContent='';showError(e);$('.retry-source').hidden=/Extension context invalidated/i.test(e.message||'');busy(false);}
 }
@@ -79,7 +80,7 @@ function render(m){
 function jump(id){try{const fresh=C.extract(document.querySelector('.article-body .editor-show'));const index=source.paragraphs.findIndex(p=>p.id===id),item=fresh.paragraphs[index];if(index<0||item?.text!==source.paragraphs[index].text)throw Error('正文已更新，请重新生成摘要');const node=fresh.nodes[index];close();node.scrollIntoView({block:'center',behavior:'smooth'});const outline=node.style.outline;node.style.outline='2px solid #ff8b3d';setTimeout(()=>node.style.outline=outline,2200);}catch(e){showError(e);}}
 $('.model-settings').onclick=()=>{try{if(!port)connect();port.postMessage({type:'open-settings'});}catch(e){showError(e);}};
 $('.retry-source').onclick=prepare;$('.launch').onclick=open;$('.close').onclick=close;$('.check').onclick=prepare;$('.cancel').onclick=()=>{epoch++;port?.postMessage({type:'cancel'});busy(false);status('正在取消…');};$('.clear').onclick=()=>{if(!running&&source)port?.postMessage({type:'clear',account,source});};
-$('.generate').onclick=async()=>{if(running||!source||!ready)return;phase='正在准备分析';const mark=epoch;busy(true);try{if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(C.articleUrl(location.href)!==source.url)throw Error('文章已改变，请重新打开速览');const fresh=C.extract(document.querySelector('.article-body .editor-show'));source=C.source({...source,paragraphs:fresh.paragraphs,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE});nodes=fresh.nodes;if(mark!==epoch||!running)return;await chrome.storage.local.set({[`preference:${await C.digest(account)}`]:source.profile});if(mark!==epoch||!running)return;status('正在提交分析…');port.postMessage({type:'generate',account,source,force:hasResult});}catch(e){busy(false);showError(e);}};
+$('.generate').onclick=async()=>{if(running||!source||!ready)return;phase='正在准备分析';const mark=epoch;busy(true);try{if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(C.articleUrl(location.href)!==source.url)throw Error('文章已改变，请重新打开速览');const fresh=C.extract(document.querySelector('.article-body .editor-show'));source=C.source({...source,paragraphs:fresh.paragraphs,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE});nodes=fresh.nodes;if(mark!==epoch||!running)return;await displayStorage('set',`preference:${await C.digest(account)}`,source.profile);if(mark!==epoch||!running)return;status('正在提交分析…');port.postMessage({type:'generate',account,source,force:hasResult});}catch(e){busy(false);showError(e);}};
 $('textarea').addEventListener('input',()=>{if(!running){hasResult=false;$('.result').replaceChildren();$('.clear').hidden=true;$('.generate').textContent='按新偏好生成';$('.intro').hidden=false;status('将按当前偏好生成新的筛选结果。');}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shown)close();});chrome.runtime.onMessage.addListener(m=>{if(m.type==='longtalk-toggle')shown?close():open();});
 function syncPage(){
@@ -92,8 +93,8 @@ window.addEventListener('pagehide',()=>{epoch++;dropPort();});
 const positionKey='longtalk:widget-position',defaultPosition={right:84,top:84};
 let position={...defaultPosition},positionChanged=false;
 function placeWidget(){const el=shown?$('.panel'):$('.dock'),rect=el.getBoundingClientRect();const point=C.widgetPosition(position,{width:innerWidth,height:innerHeight},{width:rect.width,height:rect.height});el.style.right=`${point.right}px`;el.style.top=`${point.top}px`;return point;}
-function persistPosition(){positionChanged=true;chrome.storage.local.set({[positionKey]:position}).catch(()=>{});}
-chrome.storage.local.get(positionKey).then(saved=>{if(!positionChanged&&saved[positionKey])position=saved[positionKey];placeWidget();}).catch(()=>{});
+function persistPosition(){positionChanged=true;displayStorage('set',positionKey,position).catch(()=>{});}
+displayStorage('get',positionKey).then(saved=>{if(!positionChanged&&saved)position=saved;placeWidget();}).catch(()=>{});
 window.addEventListener('resize',placeWidget);
 function makeDraggable(surface){
  let drag=null;

@@ -1,9 +1,23 @@
 importScripts('core.js','providers.js');
 const C=LongtalkCore,P=LongtalkProviders,HOST='com.baiyalab.dedao_longtalk',TTL=7*86400000,CONFIG='longtalk:provider',SECRET='longtalk:api-key';
 const tabs=new Map();
+const keySlot=s=>`${SECRET}:${s.baseUrl}`;
+// Deny content scripts direct access before persisting any credentials.
+const storageReady=chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}).then(async()=>{
+ const legacy=(await chrome.storage.session.get(SECRET))[SECRET];
+ if(legacy?.baseUrl&&typeof legacy.key==='string'){
+  const slot=keySlot(legacy);
+  if(!(await chrome.storage.local.get(slot))[slot])await chrome.storage.local.set({[slot]:legacy.key});
+  await chrome.storage.session.remove(SECRET);
+ }
+});
+storageReady.catch(()=>{});
+function publicKey(k){return k==='longtalk:widget-position'||typeof k==='string'&&/^preference:[a-f0-9]{64}$/.test(k);}
+function publicValue(k,v){return k==='longtalk:widget-position'?v&&typeof v==='object'&&Object.keys(v).every(x=>['right','top'].includes(x))&&Number.isFinite(v.right)&&Number.isFinite(v.top):typeof v==='string'&&v.length<=400;}
+
 async function settings(){return P.config((await chrome.storage.local.get(CONFIG))[CONFIG]);}
-async function apiKey(s){const record=(await chrome.storage.session.get(SECRET))[SECRET];return record?.baseUrl===s.baseUrl?record.key:'';}
-async function apiReady(s){if(!s.model)throw Error('请打开模型设置，填写模型名称');if(!await apiKey(s))throw Error('请打开模型设置，填写本次会话使用的 API Key');if(!await chrome.permissions.contains({origins:[P.origin(s)]}))throw Error('尚未授权访问模型服务，请在模型设置中保存并授权');}
+async function apiKey(s){await storageReady;return (await chrome.storage.local.get(keySlot(s)))[keySlot(s)]||'';}
+async function apiReady(s){if(!s.model)throw Error('请打开模型设置，填写模型名称');if(!await apiKey(s))throw Error('请打开模型设置，填写并保存 API Key');if(!await chrome.permissions.contains({origins:[P.origin(s)]}))throw Error('尚未授权访问模型服务，请在模型设置中保存并授权');}
 function nativeStatus(m,s){
  if(m.resultVersion!==C.VERSION||m.protocolVersion!==3)return {type:'connection',ready:false,message:'本机连接程序需要更新，请运行新版安装器。',mode:s.mode};
  const ready=m.providers?m.providers[s.mode]===true:s.mode==='codex'&&m.ready===true;
@@ -12,15 +26,26 @@ function nativeStatus(m,s){
 function inspectNative(s){return new Promise((resolve,reject)=>{let port;const timer=setTimeout(()=>{port?.disconnect();reject(Error('本机程序响应超时，请检查安装'));},12000);let settled=false;try{port=chrome.runtime.connectNative(HOST);port.onMessage.addListener(m=>{if(m.type!=='hello'||settled)return;settled=true;clearTimeout(timer);const info=nativeStatus(m,s);resolve(info);port.disconnect();});port.onDisconnect.addListener(()=>{const error=chrome.runtime.lastError;if(settled)return;settled=true;clearTimeout(timer);reject(Error('未连接本机程序，请运行与你的系统对应的连接安装器'));});port.postMessage({type:'hello'});}catch{clearTimeout(timer);reject(Error('本机连接失败，请检查安装'));}});}
 chrome.runtime.onInstalled.addListener(async details=>{if(details.reason==='update'&&details.previousVersion&&!((await chrome.storage.local.get(CONFIG))[CONFIG]))await chrome.storage.local.set({[CONFIG]:{mode:'codex',model:''}});});
 chrome.action.onClicked.addListener(tab=>{if(C.articleUrl(tab.url))chrome.tabs.sendMessage(tab.id,{type:'longtalk-toggle'}).catch(()=>{});else chrome.runtime.openOptionsPage();});
-// Settings (and secrets) can only be changed/read through the extension's own options page.
+// Content scripts can access only display preferences; settings never return raw keys.
 chrome.runtime.onMessage.addListener((m,sender,respond)=>{
+ if(m.type==='public-storage'){
+  if(sender.id!==chrome.runtime.id||!sender.tab?.id||sender.frameId!==0||!C.officialPage(sender.url))return;
+  (async()=>{
+   await storageReady;
+   if(!publicKey(m.key)||!['get','set'].includes(m.operation))throw Error('不支持的界面设置');
+   if(m.operation==='set'){if(!publicValue(m.key,m.value))throw Error('界面设置无效');await chrome.storage.local.set({[m.key]:m.value});return {ok:true};}
+   return {value:(await chrome.storage.local.get(m.key))[m.key]};
+  })().then(respond,e=>respond({error:e.message}));return true;
+ }
+
  if(sender.url!==chrome.runtime.getURL('options.html')||sender.id!==chrome.runtime.id||sender.tab&&sender.frameId!==0)return;
  (async()=>{
   if(m.type==='get-settings'){const s=await settings();return {config:s,hasKey:s.mode==='api'&&!!await apiKey(s)};}
   if(m.type==='save-settings'){
+   await storageReady;
    const s=P.config(m.config);if(s.mode==='api'&&!await chrome.permissions.contains({origins:[P.origin(s)]}))throw Error('请先允许访问所选 API 网站');
-   if(s.mode==='api'&&m.key){if(typeof m.key!=='string'||m.key.length>4096||/[\r\n]/.test(m.key))throw Error('API Key 格式错误');await chrome.storage.session.set({[SECRET]:{baseUrl:s.baseUrl,key:m.key.trim()}});}
-   if(m.forgetKey)await chrome.storage.session.remove(SECRET);
+   if(s.mode==='api'&&m.key){if(typeof m.key!=='string'||m.key.length>4096||/[\r\n]/.test(m.key))throw Error('API Key 格式错误');await chrome.storage.local.set({[keySlot(s)]:m.key.trim()});}
+   if(m.forgetKey&&s.mode==='api')await chrome.storage.local.remove(keySlot(s));
    await chrome.storage.local.set({[CONFIG]:s});
    for(const entry of tabs.values()){entry.stop();entry.post({type:'settings-changed'});}
    return {ok:true,hasKey:s.mode==='api'&&!!await apiKey(s)};

@@ -5,8 +5,8 @@
 <section id="api-fields">
 <label>服务商<select id="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义 OpenAI 兼容服务</option></select></label>
 <label>API 地址<input id="base-url" type="url" placeholder="https://example.com/v1" autocomplete="off"></label><small>使用 Chat Completions 兼容接口；正文会发送给此地址对应的服务商。</small>
-<label>API Key<input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="填写自己的 API Key"></label><small id="key-hint">仅保留在本次浏览器会话，不同步。退出浏览器或重新加载插件后需要重新填写。</small>
-<button type="button" class="text-button" id="forget">清除本次会话的 Key</button>
+<label>API Key<input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="填写自己的 API Key"></label><small id="key-hint">保存在当前浏览器的本机扩展存储中，重启浏览器、更新或重新加载插件后仍可使用，不通过 Chrome 账号同步。</small>
+<button type="button" class="text-button" id="forget">清除当前服务的 Key</button>
 </section>
 <label id="model-label">模型名称<input id="model" type="text" placeholder="填写服务商提供的模型 ID" autocomplete="off" spellcheck="false"></label>
 <section id="native-fields" hidden><p id="native-help"></p><ol><li>安装所选工具并完成其命令行登录。</li><li>在分享包中运行系统对应的安装器：Windows 用 install-windows.cmd；macOS 用 install-macos.command；Linux 用 install-linux.sh。</li><li>回到此页检测程序，再打开得到长谈生成速览。</li></ol><small>本机模式需要 Python 3；通过 npm 安装的 CodeBuddy CLI 还需要 Node.js。模型名称可留空，使用工具默认模型。检测只确认程序可用，登录和额度在生成时验证。</small></section>
