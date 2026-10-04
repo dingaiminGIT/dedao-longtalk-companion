@@ -1,0 +1,28 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');
+const P=require('../extension/providers.js'),C=require('../extension/core.js'),spec=require('../extension/analysis-spec.json');
+const settings=()=>P.config({provider:'custom',baseUrl:'http://127.0.0.1:1234/v1',model:'test'});
+const summary=()=>({summary:'摘要',verdict:'精选段落',reason:'理由',dimensions:['观点启发','具体案例','行动指导'].map(name=>({name,level:'一般',reason:'原文依据'})),points:Array.from({length:5},()=>({insight:'观点',speaker:'嘉宾',reasoning:'论证',example:'案例',action:'行动',boundary:'局限',actionOrigin:'由观点延伸',evidence:['P0001']})),limitations:['原文局限']});
+const transcript=()=>({url:'https://www.dedao.cn/course/article?id=ExampleArticle1234',title:'测试',profile:'观点案例行动',paragraphs:Array.from({length:5},(_,i)=>({id:`P000${i+1}`,text:'正文'.repeat(600)}))});
+function response(value){return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(value)},finish_reason:'stop'}]}),{headers:{'content-type':'application/json'}});}
+test('API configuration restricts destinations and rejects full endpoint URLs',()=>{
+ for(const baseUrl of ['http://evil.test','file:///tmp/model','https://user:secret@api.test','https://api.test/?key=secret','https://api.test/v1/chat/completions'])assert.throws(()=>P.config({baseUrl}));
+ assert.equal(settings().baseUrl,'http://127.0.0.1:1234/v1');assert.equal(P.config({mode:'workbuddy'}).model,'');
+});
+test('oversized paragraphs are split without inventing reference IDs',()=>{const chunks=P.split([{id:'P0001',text:'文'.repeat(9500)},{id:'P0002',text:'尾'}],4000);assert.equal(chunks.length,3);assert.equal(chunks.flat().map(x=>x.text).join(''),'文'.repeat(9500)+'尾');assert.deepEqual([...new Set(chunks.flat().map(x=>x.id))],['P0001','P0002']);});
+test('real HTTP streaming request preserves UTF-8 across chunks and omits cookies',async()=>{
+ let observed;const server=http.createServer(async(req,res)=>{let raw='';for await(const x of req)raw+=x;observed={headers:req.headers,body:JSON.parse(raw),url:req.url};res.writeHead(200,{'Content-Type':'text/event-stream'});const body=Buffer.from('data: '+JSON.stringify({choices:[{delta:{content:'{"text":"中文"}'}}]})+'\n\ndata: '+JSON.stringify({choices:[{delta:{},finish_reason:'stop'}]})+'\n\ndata: [DONE]\n\n');for(let i=0;i<body.length;i+=3)res.write(body.subarray(i,i+3));res.end();});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));try{const s={...settings(),baseUrl:`http://127.0.0.1:${server.address().port}/v1`};assert.deepEqual(await P.completion(s,'test-key',[{role:'user',content:'JSON test'}],new AbortController().signal),{text:'中文'});assert.equal(observed.url,'/v1/chat/completions');assert.equal(observed.headers.authorization,'Bearer test-key');assert.equal(observed.headers.cookie,undefined);assert.equal(observed.body.stream,true);}finally{await new Promise(r=>server.close(r));}
+});
+test('requests prohibit redirects and never expose error response bodies',async()=>{
+ await assert.rejects(P.completion(settings(),'key',[],null,{fetcher:async(_,init)=>{assert.equal(init.redirect,'error');assert.equal(init.credentials,'omit');assert.equal(init.referrerPolicy,'no-referrer');return new Response('SECRET',{status:401});}}),e=>/API Key/.test(e.message)&&!e.message.includes('SECRET'));
+});
+test('truncation, tool calls and broken streams are rejected',async()=>{
+ for(const value of [{message:{content:'{"ok":true}'},finish_reason:'length'},{message:{content:'{"ok":true}',tool_calls:[{}]},finish_reason:'tool_calls'}])await assert.rejects(P.completion(settings(),'key',[],null,{fetcher:async()=>new Response(JSON.stringify({choices:[value]}))}));
+ await assert.rejects(P.completion(settings(),'key',[],null,{fetcher:async()=>new Response('data: {"choices":[{"delta":{"content":"{}"}}]}\n',{headers:{'content-type':'text/event-stream'}})}),/断开/);
+ const abort=new AbortController();abort.abort();await assert.rejects(P.completion(settings(),'key',[],abort.signal),{name:'AbortError'});
+});
+test('long input passes through chunk notes and final schema validation',async()=>{
+ let calls=0;const progress=[],s={...settings(),chunkChars:4000};const output=await P.analyze(s,'key',transcript(),spec,new AbortController().signal,m=>progress.push(m),{fetcher:async(_,init)=>{calls++;const payload=JSON.parse(init.body),input=JSON.parse(payload.messages[1].content);if(input.paragraphs)return response({notes:[{insight:'观点',reasoning:'论证',example:'具体案例',action:'行动',boundary:'边界',evidence:[input.paragraphs[0].id]}]});assert.equal(input.notes.length,2);assert.equal(input.paragraphs,undefined);return response(summary());}});
+ assert.equal(calls,3);C.validateResult(output,transcript().paragraphs);assert.match(progress[0],/1\/2/);assert.match(progress.at(-1),/合并/);
+});
+test('hallucinated chunk references stop analysis before final synthesis',async()=>{let calls=0;await assert.rejects(P.analyze({...settings(),chunkChars:4000},'key',transcript(),spec,null,()=>{},{fetcher:async()=>{calls++;return response({notes:[{insight:'观点',reasoning:'论证',example:'案例',action:'行动',boundary:'边界',evidence:['P9999']}]});}}),/引用异常/);assert.equal(calls,1);});

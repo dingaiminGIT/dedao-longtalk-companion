@@ -56,3 +56,27 @@ class Tests(unittest.TestCase):
    self.assertEqual(events[-1]['type'],'error');self.assertIn('额外操作',events[-1]['message'])
 
 if __name__=='__main__':unittest.main()
+
+class ProviderTests(unittest.TestCase):
+ def test_workbuddy_argv_has_no_tools_or_permission_bypass(self):
+  cmd=h.provider_command({'workbuddy':['/bin/node','/app/codebuddy']},'workbuddy',Path('/tmp/test'),'model-name')
+  self.assertEqual(cmd[:2],['/bin/node','/app/codebuddy']);self.assertEqual(cmd[cmd.index('--tools')+1],'');self.assertIn('--strict-mcp-config',cmd);self.assertIn('--no-session-persistence',cmd);self.assertNotIn('-y',cmd)
+ def test_workbuddy_parses_structured_result_and_reports_login(self):
+  self.assertEqual(h.workbuddy_result(json.dumps({'type':'result','structured_output':result()}),''),result())
+  with self.assertRaisesRegex(RuntimeError,'/login'):h.workbuddy_result('Authentication required. Please use /login','')
+  with self.assertRaisesRegex(ValueError,'额外操作'):h.workbuddy_result(json.dumps([{'type':'assistant','message':{'content':[{'type':'tool_use'}]}}]),'')
+ def test_provider_and_model_cannot_inject_flags(self):
+  host=h.Host({})
+  for change in [{'provider':'arbitrary'},{'model':'x --tools shell'},{'model':'x\n-y'}]:
+   with self.assertRaises(ValueError):host.message({'type':'generate','id':'test','source':source(),**change})
+ def test_hello_reports_each_program(self):
+  host=h.Host({'codex':[sys.executable],'workbuddy':['/missing/file']});events=[];host.send=events.append;host.message({'type':'hello'})
+  self.assertEqual(events[0]['protocolVersion'],3);self.assertEqual(events[0]['providers'],{'codex':True,'workbuddy':False})
+
+class InstallerTests(unittest.TestCase):
+ def test_platform_locations(self):
+  spec=importlib.util.spec_from_file_location('installer',Path(__file__).resolve().parents[1]/'scripts/install.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  home=Path('/users/test')
+  self.assertIn('Library/Application Support',str(module.locations('darwin',home,{})[0]))
+  self.assertEqual(module.locations('win32',home,{'LOCALAPPDATA':'/local'})[0],Path('/local/DedaoLongtalk/host'))
+  self.assertEqual(module.locations('linux',home,{'XDG_CONFIG_HOME':'/config'})[1],[Path('/config/google-chrome/NativeMessagingHosts')])

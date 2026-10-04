@@ -1,57 +1,92 @@
-# 得到长谈速览 0.2.0
+# 得到长谈速览 0.3.0
 
-给得到长谈文字稿生成一张便于筛选的速览卡：内容概览、观点启发 / 具体案例 / 行动指导三个维度、5～8 个重点详解与原文入口。默认偏好是“有新观点、有具体案例，能指导行动”，可修改。
+给得到长谈文字稿生成便于筛选的速览：内容概览、观点启发 / 具体案例 / 行动指导三个维度、5～8 个重点详解与原文入口。默认偏好是“有新观点、有具体案例，能指导行动”，可修改。
 
 独立项目，非得到官方产品。与知识红包插件、Android 项目分别维护。
 
-## macOS + Chrome 安装
+## 分享与安装
 
-需要已安装并登录的 Codex CLI、Python 3，以及能够访问全文的得到账号。
+把 `dedao-longtalk-0.3.0.zip` 发给对方即可，不包含你的登录信息、API Key、文章或私人摘要。解压后保留目录，在桌面 Chrome 的 `chrome://extensions/` 开启开发者模式，点击“加载已解压的扩展程序”，选择 **extension** 文件夹。需要 Chrome 116 或更新版本。
 
-1. 解压安装包并保留目录。
-2. 双击 `install-macos.command` 安装本机连接程序；也可在终端进入本目录运行 `python3 scripts/install.py`。
-3. 打开 `chrome://extensions/`，开启开发者模式，点击“加载已解压的扩展程序”，选择本目录内的 **extension** 文件夹。
-4. 打开得到长谈文章页，等文字稿加载后，点击页面右侧 **长谈速览** 浮条。
-5. 本机连接正常后点“生成速览”。首次调用会把这期文字稿发送给 Codex 在线模型，可能需要数分钟。
+扩展本身不限定 macOS。Windows、macOS、Linux 使用同一份扩展。首次使用默认 API 模式；从旧版升级会保留本机 Codex 模式。
 
-本机连接不代表离线模型。使用当前用户的 Codex 登录与额度，不额外要求 API Key。默认使用忽略用户自定义配置后的 Codex 默认模型，避免加载用户项目工具、插件或 hooks。
+打开得到长谈文章，点击浮条展开，再点底部 **模型设置**。也可以在 Chrome 扩展管理页打开本扩展的“扩展程序选项”。每个用户使用自己的得到账号和模型账号 / 额度。
 
-安装时本机连接程序会复制至 `~/Library/Application Support/DedaoLongtalk/host`，注册清单位于 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.baiyalab.dedao_longtalk.json`。可重复运行安装器更新连接程序；扩展代码更新后需要在扩展管理页重新加载，再刷新文章页。
+## 选择模型
 
-## 使用
+| 方式 | 需要什么 | 系统与验证情况 |
+| --- | --- | --- |
+| API | 服务商 Base URL、模型 ID、自己的 API Key | 桌面 Chrome 跨平台；不需要 Python 或本机连接程序 |
+| 本机 Codex | Codex CLI、CLI 登录、Python 3、本机连接程序 | macOS 已实测；提供 Windows / Linux 安装脚本，尚未实机验证 |
+| 本机 WorkBuddy | WorkBuddy 所带 CodeBuddy CLI、其登录、Node.js、Python 3、本机连接程序 | 适配入口已完成；本机检测通过，但 CLI 提示未登录，真实模型生成尚待验证 |
 
-- 点击浮条箭头展开，点击面板右上角箭头收起。拖动六点手柄或面板标题栏移动，位置会保存。手柄支持方向键微调，双击或按 Home 恢复默认位置。
-- 仅在有全文稿的文章页显示；电子书、首页和普通文章页自动隐藏。
-- 连接断开会停止加载提示并提供“重新连接”；更新扩展后请刷新已经打开的得到页面。
+### API 模式
 
-- 只在点击生成时调用模型。关闭面板可继续阅读；生成完成后重新展开读取缓存。
-- 已有相同正文、偏好和账号的摘要时自动载入缓存；“重新生成”会重新调用 Codex。
-- 生成中可随时取消，关闭文章标签页也会停止本机任务。超时上限五分钟。
-- 点击每条重点下的“原文”按钮，面板收起并定位、高亮对应正文。文字稿变化时会拒绝跳到错误位置。
-- 仅提供文字段落定位，不提供未经验证的视频时间戳。
-- 正常状态只保留生成入口；读取失败时才显示“重试读取”。每次生成都会自动重新提取当前正文。
-- 先看概览与观看建议，再读每个重点的论证；首个重点默认展开案例、行动与适用边界，其余可按需展开，也可点“全部展开”。长稿目标约 3000～4500 字，材料不足时不凑字数。
-- 0.2.0 使用新版摘要格式，旧版短摘要不会命中新缓存；升级后需重新生成一次。更新扩展时也需运行安装器更新本机连接程序，本机程序过旧会显示更新提示。
-- 修改偏好后按新偏好生成，按账号保存偏好。缓存最多 30 条、7 天，不缓存正文。
-- “清除此篇摘要”删除当前账号、正文与偏好对应的本机摘要，不改动得到学习记录。
+1. 选择 OpenAI、DeepSeek 或“自定义 OpenAI 兼容服务”。
+2. 填写 Base URL（如 `https://api.example.com/v1`），不要附加 `/chat/completions`；填写该服务商的模型 ID 和 API Key。
+3. 保存，并允许扩展访问所选 API 网站。可点击“测试 API 与模型”，发送一条极短测试消息，可能产生少量费用。
+4. 回到文章页，点击“生成速览”。
 
-原文中嘉宾的主观看法并不是事实核查结果；由模型延伸的行动会明确标注，不包装成嘉宾原话。
+当前协议为 **Chat Completions**，支持流式输出及 JSON 模式，不代表所有厂商原生协议都兼容。Claude / Gemini 原生接口需要另做适配，或使用自行选择的兼容接口。自定义地址须为 HTTPS；本机 `localhost` / `127.0.0.1` 可用 HTTP。不会自动向其他服务商转发或回退。
 
-## 限制与排错
+Key 仅保存于扩展的会话存储，不同步、不交给得到网页。退出浏览器、禁用或重新加载扩展后需要重新填写。更改 Base URL 后不会沿用另一个地址的 Key。服务地址和模型等非敏感配置保存在本机。
 
-- 当前只支持有“全文稿”或“文字稿”结构的得到文章页。没有全文权限、过短、超过 18 万字符或结构不匹配时不生成。
-- “尚未连接本机程序”：运行安装器，再点“检查连接”。首次在其他 Chromium 浏览器安装需使用该浏览器的 NativeMessagingHosts 目录注册，不能假设与 Chrome 共用。
-- 登录提示：终端运行 `codex login`，成功后重试。
-- 额度/网络错误：稍后重试；不会将失败或无效引用当成正常摘要。
-- 本版只提供 macOS 安装脚本。未上架 Chrome 应用商店，也没有自动发布私人摘要。
+长稿默认每约 1.6 万字符分段整理，再合并为详细速览；长文会产生多次模型调用。设置页可调整单段大小、输出上限和 JSON 模式。模型须有足够上下文及中文输出能力；只保证结构与引用合法，不保证每个服务商输出质量相同。API 任务最多运行 10 分钟，可随时取消。
 
-## 卸载
+### 本机 Codex / WorkBuddy
 
-在浏览器扩展管理页移除扩展。删除上述本机主机目录及属于本插件的注册清单即可卸载连接程序；不会删除 Codex 或其登录信息。
+本机模式指通过本机命令行调用模型，**不等于离线模型**。不需要在扩展中填写 API Key，使用所选 CLI 的登录和额度。模型名称可留空使用工具默认值。
 
-## 开发与验证
+先安装 Python 3 和所选工具，再执行对应安装器：
 
-无 npm 依赖，原生连接程序使用 Python 标准库。
+- macOS：双击 `install-macos.command`，或 `python3 scripts/install.py`。
+- Windows：双击 `install-windows.cmd`，或 `py -3 scripts/install.py`。
+- Linux：运行 `sh install-linux.sh`。
+
+安装器只注册当前用户，不下载依赖、不读取或复制认证文件。WorkBuddy 自动查找常见桌面安装位置；找不到时可以指定 CLI 的实际路径：
+
+```sh
+python3 scripts/install.py --workbuddy /path/to/codebuddy --node /path/to/node
+python3 scripts/install.py --codex /path/to/codex
+```
+
+Windows 的 npm `.cmd` shim 会尝试解析为实际 JS 入口；无法解析时请指定实际 `.exe` / `.js`，不经 shell 执行生成命令。Linux 的 WorkBuddy 模式仅适用于已有可用的兼容 CLI，不表示 WorkBuddy 桌面产品支持 Linux。
+
+Codex 登录运行 `codex login`。WorkBuddy 桌面登录可能不与其 CLI 共享；生成时若提示未登录，需要通过该 CLI 完成 `/login`。macOS 默认安装时可在终端进入以下 CLI，再按其提示登录：
+
+```sh
+node '/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy'
+```
+
+“检测本机程序”只验证连接程序和可执行文件存在；登录、额度、模型是否可用以实际生成为准。本机任务最多 5 分钟。
+
+安装位置：macOS 为 `~/Library/Application Support/DedaoLongtalk/host`，Linux 为 `~/.local/share/dedao-longtalk/host`，Windows 为 `%LOCALAPPDATA%\DedaoLongtalk\host`。Chrome 的注册方式遵循 [Native Messaging 文档](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)。其他 Chromium 浏览器需另注册对应目录，可用 `--registry-dir` 指定。
+
+## 阅读与交互
+
+- 箭头展开 / 收起；拖动六点手柄或标题栏移动，位置会保存。手柄支持方向键微调，双击或按 Home 恢复默认位置。
+- 仅在有全文稿的文章页显示，电子书、首页和普通文章页自动隐藏。
+- 先看概览与建议，再读论证；展开重点可看案例、行动与适用边界，也可“全部展开”。长稿目标约 3000～4500 字，材料不足时不凑字数。
+- 点击“原文”定位并高亮正文；不提供未经验证的视频时间戳。嘉宾意见归属于发言者，由模型延伸的行动会明确标注。
+- 只有点击生成才发送正文。收起面板不取消任务；取消按钮、关闭文章标签页或保存模型设置会停止任务。
+- 每次生成重新提取正文。读取失败时才显示“重试读取”。
+- 缓存按账号、正文、偏好和模型配置隔离，最多 30 条、7 天，不缓存原稿。可“清除此篇摘要”；不会更改得到学习记录。
+
+## 更新与卸载
+
+扩展更新后在管理页点重新加载，并刷新已打开的文章页。使用本机模式时还应重跑安装器更新连接程序。
+
+在 Chrome 扩展管理页移除扩展会清除本机扩展数据。要卸载本机连接程序，删除上述 `DedaoLongtalk/host` 目录，以及 Chrome 的 `NativeMessagingHosts/com.baiyalab.dedao_longtalk.json`；Windows 还需删除当前用户注册表 `Software\Google\Chrome\NativeMessagingHosts\com.baiyalab.dedao_longtalk`。不会删除 Codex、WorkBuddy 或其登录信息。
+
+## 限制与验证
+
+需要用户自己有文章全文访问权限；缺少全文稿、超过 18 万字符或页面结构不匹配时不生成。API 适配器通过本地模拟兼容服务验证了请求、流式中文、分段合并、错误与取消；尚未用用户真实 API Key 验证线上服务。WorkBuddy CLI 当前登录未完成，不将适配完成标作实际生成已验证。Windows / Linux 安装路径经过单元测试，未在对应系统实机运行。
+
+未上架应用商店。分享包不自动更新；换版本需替换扩展目录并重新加载。不要把自己的浏览器数据或 CLI 认证文件一起发给别人。
+
+## 开发
+
+无 npm 依赖；本机连接程序使用 Python 标准库。
 
 ```sh
 node --test tests/*.test.cjs
@@ -59,4 +94,4 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 python3 scripts/package.py
 ```
 
-`extension/` 是浏览器代码，`native/host.py` 实现原生消息、固定 Codex 调用与结果校验。原文仅经 stdin 临时传给模型；HTML 使用 textContent 渲染，原文回跳仅引用现有段落。构建包使用固定文件清单，不打包 artifacts、原稿或运行日志。
+`extension/analysis-spec.json` 是三种模式共用的提示词和输出结构。`providers.js` 实现 API 请求与分段，`background.js` 管理设置、任务和缓存；`native/host.py` 固定调用本机 CLI。内容以 textContent 渲染，不执行模型返回代码。打包使用固定文件清单，不包含 artifacts、原稿、密钥或运行日志。

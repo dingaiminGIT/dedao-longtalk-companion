@@ -1,0 +1,17 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>长谈速览 · 模型设置</title><link rel="stylesheet" href="options.css"></head><body><main>
+<header><span class="eyebrow">得到长谈速览</span><h1>选择你的模型</h1><p>API 模式支持 Windows、macOS 和 Linux，不需要本机连接程序。</p></header>
+<form id="settings">
+<label>调用方式<select id="mode"><option value="api">API · 直接连接模型服务</option><option value="codex">本机 Codex</option><option value="workbuddy">本机 WorkBuddy</option></select></label>
+<section id="api-fields">
+<label>服务商<select id="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义 OpenAI 兼容服务</option></select></label>
+<label>API 地址<input id="base-url" type="url" placeholder="https://example.com/v1" autocomplete="off"></label><small>使用 Chat Completions 兼容接口；正文会发送给此地址对应的服务商。</small>
+<label>API Key<input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="填写自己的 API Key"></label><small id="key-hint">仅保留在本次浏览器会话，不同步。退出浏览器或重新加载插件后需要重新填写。</small>
+<button type="button" class="text-button" id="forget">清除本次会话的 Key</button>
+</section>
+<label id="model-label">模型名称<input id="model" type="text" placeholder="填写服务商提供的模型 ID" autocomplete="off" spellcheck="false"></label>
+<section id="native-fields" hidden><p id="native-help"></p><ol><li>安装所选工具并完成其命令行登录。</li><li>在分享包中运行系统对应的安装器：Windows 用 install-windows.cmd；macOS 用 install-macos.command；Linux 用 install-linux.sh。</li><li>回到此页检测程序，再打开得到长谈生成速览。</li></ol><small>本机模式需要 Python 3；WorkBuddy 命令行还需要 Node.js。模型名称可留空，使用工具默认模型。检测只确认程序可用，登录和额度在生成时验证。</small></section>
+<details id="advanced"><summary>长文本与兼容设置</summary><label>单次正文上限（字符）<input id="chunk-chars" type="number" min="4000" max="60000" step="1000"></label><small>长稿会分段整理，再合并为一份速览。模型上下文较小时可调低；分段越多，调用次数越多。</small><label>输出上限（tokens）<input id="max-tokens" type="number" min="4096" max="32768" step="1024"></label><label class="check"><input type="checkbox" id="json-mode">使用服务商的 JSON 输出模式</label><small>若兼容服务不支持 response_format，可取消此选项；插件仍会校验输出结构。</small></details>
+<div class="actions"><button type="submit" class="primary">保存设置</button><button type="button" id="test">测试连接</button></div><small id="test-hint">API 测试会发送一条很短的测试消息，可能产生少量费用，不发送文章内容。保存设置会停止正在生成的任务。</small>
+<p id="status" role="status" aria-live="polite"></p>
+</form><footer>插件使用你自己的账号与额度。API Key 不会交给得到页面，也不会上传给插件开发者。</footer>
+</main><script src="providers.js"></script><script src="options.js"></script></body></html>

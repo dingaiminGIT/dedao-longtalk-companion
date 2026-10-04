@@ -11,25 +11,26 @@ root.innerHTML=`<style>
 <div class="dock" hidden><button class="launch" aria-label="展开长谈速览" title="展开长谈速览" aria-haspopup="dialog" aria-controls="dd-longtalk-panel" aria-expanded="false">${arrow("left")}<span>长谈<br>速览</span></button><div class="dock-state" hidden></div>${handle}</div>
 <section id="dd-longtalk-panel" class="panel" role="dialog" aria-label="长谈速览" hidden>
 <header><div class="heading">${handle}<div><h1>长谈速览</h1><div class="muted">先看重点，再决定是否完整观看</div></div></div><button class="close" aria-label="收起长谈速览" title="收起为浮条">${arrow("right")}</button></header>
-<div class="body"><div class="source"></div><div class="meta"></div><div class="connection" hidden></div><div class="setup" hidden>请双击安装包中的 install-macos.command，完成后点「重新连接」。本机还需要已安装并登录 Codex。<button class="quiet check">重新连接</button></div>
+<div class="body"><div class="source"></div><div class="meta"></div><div class="connection" hidden></div><div class="setup" hidden>打开「模型设置」配置 API，或选择已安装并登录的本机工具。<button class="quiet check">重新连接</button></div>
 <details class="preferences"><summary>筛选偏好</summary><textarea aria-label="筛选偏好" maxlength="400"></textarea><div class="muted">偏好改变后生成新摘要，最多 400 字。</div></details>
 <div class="buttons"><button class="primary generate">生成速览</button><button class="secondary cancel" hidden>取消生成</button></div><div class="status" role="status" aria-live="polite"></div><button class="quiet retry-source" hidden>重试读取</button>
-<div class="intro"><strong>观点 · 论证 · 案例 · 行动</strong>先看判断，再展开案例与适用边界。<br>仅在你点击生成后调用 Codex。</div><div class="result"></div></div>
-<div class="footer"><span>通过本机 Codex 调用在线模型</span><button class="quiet clear" hidden>清除此篇摘要</button></div>
+<div class="intro"><strong>观点 · 论证 · 案例 · 行动</strong>先看判断，再展开案例与适用边界。<br>仅在你点击生成后调用所选模型。</div><div class="result"></div></div>
+<div class="footer"><button class="quiet model-settings">模型设置</button><button class="quiet clear" hidden>清除此篇摘要</button></div>
 </section>`;document.documentElement.append(host);
 const $=s=>root.querySelector(s);$('textarea').value=C.DEFAULT_PROFILE;
-let port=null,account='',source=null,nodes=[],running=false,ready=false,shown=false,route=location.href,epoch=0,start=0,timer=null,hasResult=false,connectionState='idle',available=false;
+let port=null,account='',source=null,nodes=[],running=false,ready=false,shown=false,route=location.href,epoch=0,start=0,timer=null,hasResult=false,connectionState='idle',available=false,phase='正在分析全文';
 function supported(){return C.supportedPage(location.href,document.querySelector('.article-body .editor-show'));}
 function dropPort(){const previous=port;port=null;previous?.disconnect();}
 function disconnected(message,canReconnect=true){ready=false;connectionState='failed';$('.connection').hidden=true;$('.setup').hidden=!canReconnect;busy(false);status(message,true);}
-function idleStatus(){if(connectionState==='failed')return;if(ready)status(hasResult?'摘要已载入，可点击原文核对。':'文字稿已准备好，可以生成速览。');else status('文字稿已准备好，正在连接本机 Codex…');}
+function idleStatus(){if(connectionState==='failed')return;if(ready)status(hasResult?'摘要已载入，可点击原文核对。':'文字稿已准备好，可以生成速览。');else status('文字稿已准备好，正在检查模型设置…');}
 function showError(error){const text=String(error?.message||error);if(/Extension context invalidated/i.test(text)){disconnected('扩展已更新，请刷新网页后再打开速览。',false);return;}status(error?.name==='TimeoutError'?'读取超时，请稍后重试。':text,true);}
 function status(text,error=false){$('.status').textContent=text;$('.status').classList.toggle('error',error);}
-function busy(value){running=value;$('.dock-state').hidden=!value;$('.dock-state').textContent=value?'分析中':'';$('.generate').disabled=value||!source||!ready;$('.cancel').hidden=!value;$('textarea').disabled=value;$('.clear').disabled=value;$('.retry-source').disabled=value;$('.intro').hidden=value||hasResult;clearInterval(timer);if(value){start=Date.now();timer=setInterval(()=>{if(running)status(`正在分析全文 · ${Math.floor((Date.now()-start)/1000)} 秒\n长稿可能需要几分钟，可随时取消。`);},1000);} }
+function busy(value){running=value;$('.dock-state').hidden=!value;$('.dock-state').textContent=value?'分析中':'';$('.generate').disabled=value||!source||!ready;$('.cancel').hidden=!value;$('textarea').disabled=value;$('.clear').disabled=value;$('.retry-source').disabled=value;$('.intro').hidden=value||hasResult;clearInterval(timer);if(value){start=Date.now();timer=setInterval(()=>{if(running)status(`${phase} · ${Math.floor((Date.now()-start)/1000)} 秒\n长稿可能需要几分钟，可随时取消。`);},1000);} }
 async function context(){const response=await fetch('https://www.dedao.cn/api/pc/user/info',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('请先登录得到账号');const data=await response.json();if(data.h?.c!==0||typeof data.c?.uid_hazy!=='string'||!data.c.uid_hazy)throw Error('请先登录得到账号');return data.c.uid_hazy;}
 function connect(){if(port)return;connectionState='checking';$('.connection').hidden=true;$('.setup').hidden=true;idleStatus();port=chrome.runtime.connect({name:'longtalk-ui'});const current=port;port.onMessage.addListener(async m=>{if(port!==current)return;
- if(m.type==='connection'){if(m.ready!==true){disconnected(m.message);return;}ready=true;connectionState='ready';$('.connection').textContent='本机 Codex 已连接';$('.connection').hidden=false;$('.setup').hidden=true;busy(running);if(!running&&!hasResult)idleStatus();return;}
- if(m.type==='progress'){if(!running)busy(true);status(m.message);return;}
+ if(m.type==='connection'){if(m.ready!==true){disconnected(m.message);return;}ready=true;connectionState='ready';$('.connection').textContent=m.message;$('.connection').hidden=false;$('.setup').hidden=true;busy(running);if(!running&&!hasResult)idleStatus();return;}
+ if(m.type==='settings-changed'){epoch++;dropPort();busy(false);ready=false;if(shown)await prepare();else{source=null;hasResult=false;}return;}
+ if(m.type==='progress'){phase=m.message;if(!running)busy(true);status(m.message);return;}
  if(['result','empty','cleared','cancelled','error'].includes(m.type))busy(false);
  if(m.type==='error'){status(m.message||'生成失败，请重试',true);return;}
  if(m.type==='cancelled'){status('已取消，本期内容仍可正常阅读。');return;}
@@ -72,12 +73,13 @@ function render(m){
   const refs=add(card,'div','','refs');for(const [n,id] of p.evidence.entries()){const button=add(refs,'button',`原文 ${n+1}`);button.title=`查看段落 ${id}`;button.addEventListener('click',()=>jump(id));}
  }
  const list=add(box,'ul','','limitations');for(const text of r.limitations)add(list,'li',text);
- add(box,'div',`${m.cached?'已载入缓存':'生成完成'} · ${new Date(m.createdAt).toLocaleString('zh-CN')}${Number.isFinite(m.seconds)?` · 耗时 ${m.seconds} 秒`:''}`,'cache-stamp');
+ add(box,'div',`${m.cached?'已载入缓存':'生成完成'}${m.provider?` · ${m.provider}`:''} · ${new Date(m.createdAt).toLocaleString('zh-CN')}${Number.isFinite(m.seconds)?` · 耗时 ${m.seconds} 秒`:''}`,'cache-stamp');
  if(connectionState!=='failed')status('先看判断与论证，展开查看案例、行动和适用边界。');busy(false);
 }
 function jump(id){try{const fresh=C.extract(document.querySelector('.article-body .editor-show'));const index=source.paragraphs.findIndex(p=>p.id===id),item=fresh.paragraphs[index];if(index<0||item?.text!==source.paragraphs[index].text)throw Error('正文已更新，请重新生成摘要');const node=fresh.nodes[index];close();node.scrollIntoView({block:'center',behavior:'smooth'});const outline=node.style.outline;node.style.outline='2px solid #ff8b3d';setTimeout(()=>node.style.outline=outline,2200);}catch(e){showError(e);}}
+$('.model-settings').onclick=()=>{try{if(!port)connect();port.postMessage({type:'open-settings'});}catch(e){showError(e);}};
 $('.retry-source').onclick=prepare;$('.launch').onclick=open;$('.close').onclick=close;$('.check').onclick=prepare;$('.cancel').onclick=()=>{epoch++;port?.postMessage({type:'cancel'});busy(false);status('正在取消…');};$('.clear').onclick=()=>{if(!running&&source)port?.postMessage({type:'clear',account,source});};
-$('.generate').onclick=async()=>{if(running||!source||!ready)return;const mark=epoch;busy(true);try{if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(C.articleUrl(location.href)!==source.url)throw Error('文章已改变，请重新打开速览');const fresh=C.extract(document.querySelector('.article-body .editor-show'));source=C.source({...source,paragraphs:fresh.paragraphs,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE});nodes=fresh.nodes;if(mark!==epoch||!running)return;await chrome.storage.local.set({[`preference:${await C.digest(account)}`]:source.profile});if(mark!==epoch||!running)return;status('正在提交分析…');port.postMessage({type:'generate',account,source,force:hasResult});}catch(e){busy(false);showError(e);}};
+$('.generate').onclick=async()=>{if(running||!source||!ready)return;phase='正在准备分析';const mark=epoch;busy(true);try{if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(C.articleUrl(location.href)!==source.url)throw Error('文章已改变，请重新打开速览');const fresh=C.extract(document.querySelector('.article-body .editor-show'));source=C.source({...source,paragraphs:fresh.paragraphs,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE});nodes=fresh.nodes;if(mark!==epoch||!running)return;await chrome.storage.local.set({[`preference:${await C.digest(account)}`]:source.profile});if(mark!==epoch||!running)return;status('正在提交分析…');port.postMessage({type:'generate',account,source,force:hasResult});}catch(e){busy(false);showError(e);}};
 $('textarea').addEventListener('input',()=>{if(!running){hasResult=false;$('.result').replaceChildren();$('.clear').hidden=true;$('.generate').textContent='按新偏好生成';$('.intro').hidden=false;status('将按当前偏好生成新的筛选结果。');}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shown)close();});chrome.runtime.onMessage.addListener(m=>{if(m.type==='longtalk-toggle')shown?close():open();});
 function syncPage(){

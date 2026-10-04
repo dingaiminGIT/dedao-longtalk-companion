@@ -36,7 +36,7 @@ function validateResult(r,paragraphs){
  return r;
 }
 async function digest(value){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}
-async function keys(account,s){if(typeof account!=='string'||!account||account.length>160)throw Error('请先登录得到账号');const group=await digest(account);return {group,key:`summary:${group}:${await digest(JSON.stringify([VERSION,s]))}`};}
+async function keys(account,s,provider=null){if(typeof account!=='string'||!account||account.length>160)throw Error('请先登录得到账号');const group=await digest(account);return {group,key:`summary:${group}:${await digest(JSON.stringify(provider?[VERSION,s,provider]:[VERSION,s]))}`};}
 const api={VERSION,DEFAULT_PROFILE,articleUrl,officialPage,supportedPage,widgetPosition,articleTitle,extract,source,validateResult,digest,keys};
 if(typeof module!=='undefined')module.exports=api;else root.LongtalkCore=Object.freeze(api);
 })(globalThis);
