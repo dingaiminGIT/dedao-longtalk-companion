@@ -11,7 +11,7 @@ root.innerHTML=`<style>
 <div class="dock" hidden><button class="launch" aria-label="展开长谈速览" title="展开长谈速览" aria-haspopup="dialog" aria-controls="dd-longtalk-panel" aria-expanded="false">${arrow("left")}<span>长谈<br>速览</span></button><div class="dock-state" hidden></div>${handle}</div>
 <section id="dd-longtalk-panel" class="panel" role="dialog" aria-label="长谈速览" hidden>
 <header><div class="heading">${handle}<div><h1>长谈速览</h1><div class="muted">先看重点，再决定是否完整观看</div></div></div><button class="close" aria-label="收起长谈速览" title="收起为浮条">${arrow("right")}</button></header>
-<div class="body"><div class="source"></div><div class="meta"></div><div class="connection" hidden></div><div class="setup" hidden>打开「模型设置」配置 API，或选择已安装并登录的本机工具。<button class="quiet check">重新连接</button></div>
+<div class="body"><div class="source"></div><div class="meta"></div><div class="connection" hidden></div><div class="setup" hidden>模型连接暂不可用；已保存的配置会保留。<button class="quiet check">重新连接</button></div>
 <details class="preferences"><summary>筛选偏好</summary><textarea aria-label="筛选偏好" maxlength="400"></textarea><div class="muted">偏好改变后生成新摘要，最多 400 字。</div></details>
 <div class="buttons"><button class="primary generate">生成速览</button><button class="secondary cancel" hidden>取消生成</button></div><div class="status" role="status" aria-live="polite"></div><button class="quiet retry-source" hidden>重试读取</button>
 <div class="intro"><strong>观点 · 论证 · 案例 · 行动</strong>先看判断，再展开案例与适用边界。<br>仅在你点击生成后调用所选模型。</div><div class="result"></div></div>
@@ -26,9 +26,9 @@ function disconnected(message,canReconnect=true){ready=false;connectionState='fa
 function idleStatus(){if(connectionState==='failed')return;if(ready)status(hasResult?'摘要已载入，可点击原文核对。':'文字稿已准备好，可以生成速览。');else status('文字稿已准备好，正在检查模型设置…');}
 function showError(error){const text=String(error?.message||error);if(/Extension context invalidated/i.test(text)){disconnected('扩展已更新，请刷新网页后再打开速览。',false);return;}status(error?.name==='TimeoutError'?'读取超时，请稍后重试。':text,true);}
 function status(text,error=false){$('.status').textContent=text;$('.status').classList.toggle('error',error);}
-function busy(value){running=value;$('.dock-state').hidden=!value;$('.dock-state').textContent=value?'分析中':'';$('.generate').disabled=value||!source||!ready;$('.cancel').hidden=!value;$('textarea').disabled=value;$('.clear').disabled=value;$('.retry-source').disabled=value;$('.intro').hidden=value||hasResult;clearInterval(timer);if(value){start=Date.now();timer=setInterval(()=>{if(running)status(`${phase} · ${Math.floor((Date.now()-start)/1000)} 秒\n长稿可能需要几分钟，可随时取消。`);},1000);} }
+function busy(value){running=value;$('.dock-state').hidden=!value;$('.dock-state').textContent=value?'分析中':'';$('.generate').disabled=value||!source||(!ready&&connectionState!=='sleeping');$('.cancel').hidden=!value;$('textarea').disabled=value;$('.clear').disabled=value;$('.retry-source').disabled=value;$('.intro').hidden=value||hasResult;clearInterval(timer);if(value){start=Date.now();timer=setInterval(()=>{if(running)status(`${phase} · ${Math.floor((Date.now()-start)/1000)} 秒\n长稿可能需要几分钟，可随时取消。`);},1000);} }
 async function context(){const response=await fetch('https://www.dedao.cn/api/pc/user/info',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('请先登录得到账号');const data=await response.json();if(data.h?.c!==0||typeof data.c?.uid_hazy!=='string'||!data.c.uid_hazy)throw Error('请先登录得到账号');return data.c.uid_hazy;}
-function connect(){if(port)return;connectionState='checking';$('.connection').hidden=true;$('.setup').hidden=true;idleStatus();port=chrome.runtime.connect({name:'longtalk-ui'});const current=port;port.onMessage.addListener(async m=>{if(port!==current)return;
+function connect(){if(port)return;ready=false;connectionState='checking';$('.connection').hidden=true;$('.setup').hidden=true;idleStatus();port=chrome.runtime.connect({name:'longtalk-ui'});const current=port;port.onMessage.addListener(async m=>{if(port!==current)return;
  if(m.type==='connection'){if(m.ready!==true){disconnected(m.message);return;}ready=true;connectionState='ready';$('.connection').textContent=m.message;$('.connection').hidden=false;$('.setup').hidden=true;busy(running);if(!running&&!hasResult)idleStatus();return;}
  if(m.type==='settings-changed'){epoch++;dropPort();busy(false);ready=false;if(shown)await prepare();else{source=null;hasResult=false;}return;}
  if(m.type==='progress'){phase=m.message;if(!running)busy(true);status(m.message);return;}
@@ -43,7 +43,26 @@ function connect(){if(port)return;connectionState='checking';$('.connection').hi
   try{if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(mark!==epoch||C.articleUrl(location.href)!==source?.url)return;C.validateResult(m.result,source.paragraphs);render(m);}
   catch(e){hasResult=false;$('.result').replaceChildren();showError(e);}
  }
-});port.onDisconnect.addListener(()=>{const error=chrome.runtime.lastError;if(port!==current)return;epoch++;port=null;disconnected(chrome.runtime.id?'连接已断开，点击「重新连接」重试。':'扩展已更新，请刷新网页后再打开速览。',!!chrome.runtime.id);});port.postMessage({type:'hello'});}
+});port.onDisconnect.addListener(()=>{
+ const error=chrome.runtime.lastError;if(port!==current)return;port=null;
+ if(!chrome.runtime.id){epoch++;disconnected('扩展已更新，请刷新网页后再打开速览。',false);return;}
+ if(running){epoch++;disconnected('生成连接中断，本次任务已停止。请重新连接后重新生成。');return;}
+ // An idle MV3 worker may stop normally. Preserve the result and reconnect on demand.
+ if(connectionState!=='ready'){disconnected('模型连接未建立，请重新连接重试。');return;}
+ ready=false;connectionState='sleeping';$('.connection').textContent='模型配置已保存，下次操作时自动连接';$('.connection').hidden=false;$('.setup').hidden=true;busy(false);
+});port.postMessage({type:'hello'});}
+async function ensureConnected(){
+ if(port&&ready)return;
+ if(!port)connect();
+ const current=port,deadline=Date.now()+15000;
+ while(port===current&&connectionState==='checking'&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100));
+ if(port!==current||!ready){
+  if(port===current&&connectionState==='checking'){dropPort();disconnected('模型连接超时，请重新连接重试。');}
+  throw Error($('.status').textContent||'模型连接暂不可用，请重新连接重试。');
+ }
+}
+async function reconnect(){try{if(!source){await prepare();return;}dropPort();await ensureConnected();if(!running)idleStatus();}catch(e){showError(e);}}
+
 async function readTitle(mark){
  const deadline=Date.now()+8000;
  while(mark===epoch){const title=C.articleTitle(document.title);if(title)return title;if(Date.now()>=deadline)throw Error('文章信息尚未加载完成，请稍后重试读取。');await new Promise(resolve=>setTimeout(resolve,100));}
@@ -79,8 +98,8 @@ function render(m){
 }
 function jump(id){try{const fresh=C.extract(document.querySelector('.article-body .editor-show'));const index=source.paragraphs.findIndex(p=>p.id===id),item=fresh.paragraphs[index];if(index<0||item?.text!==source.paragraphs[index].text)throw Error('正文已更新，请重新生成摘要');const node=fresh.nodes[index];close();node.scrollIntoView({block:'center',behavior:'smooth'});const outline=node.style.outline;node.style.outline='2px solid #ff8b3d';setTimeout(()=>node.style.outline=outline,2200);}catch(e){showError(e);}}
 $('.model-settings').onclick=()=>{try{if(!port)connect();port.postMessage({type:'open-settings'});}catch(e){showError(e);}};
-$('.retry-source').onclick=prepare;$('.launch').onclick=open;$('.close').onclick=close;$('.check').onclick=prepare;$('.cancel').onclick=()=>{epoch++;port?.postMessage({type:'cancel'});busy(false);status('正在取消…');};$('.clear').onclick=()=>{if(!running&&source)port?.postMessage({type:'clear',account,source});};
-$('.generate').onclick=async()=>{if(running||!source||!ready)return;phase='正在准备分析';const mark=epoch;busy(true);try{if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(C.articleUrl(location.href)!==source.url)throw Error('文章已改变，请重新打开速览');const fresh=C.extract(document.querySelector('.article-body .editor-show'));source=C.source({...source,paragraphs:fresh.paragraphs,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE});nodes=fresh.nodes;if(mark!==epoch||!running)return;await displayStorage('set',`preference:${await C.digest(account)}`,source.profile);if(mark!==epoch||!running)return;status('正在提交分析…');port.postMessage({type:'generate',account,source,force:hasResult});}catch(e){busy(false);showError(e);}};
+$('.retry-source').onclick=prepare;$('.launch').onclick=open;$('.close').onclick=close;$('.check').onclick=reconnect;$('.cancel').onclick=()=>{epoch++;port?.postMessage({type:'cancel'});busy(false);status('正在取消…');};$('.clear').onclick=()=>{if(!running&&source)try{if(!port)connect();port.postMessage({type:'clear',account,source});}catch(e){showError(e);}};
+$('.generate').onclick=async()=>{if(running||!source||(!ready&&connectionState!=='sleeping'))return;phase='正在准备分析';const mark=epoch;busy(true);try{await ensureConnected();if(mark!==epoch||!running)return;if((await context())!==account)throw Error('账号已切换，请重新打开速览');if(C.articleUrl(location.href)!==source.url)throw Error('文章已改变，请重新打开速览');const fresh=C.extract(document.querySelector('.article-body .editor-show'));source=C.source({...source,paragraphs:fresh.paragraphs,profile:$('textarea').value.trim()||C.DEFAULT_PROFILE});nodes=fresh.nodes;if(mark!==epoch||!running)return;await displayStorage('set',`preference:${await C.digest(account)}`,source.profile);if(mark!==epoch||!running)return;status('正在提交分析…');port.postMessage({type:'generate',account,source,force:hasResult});}catch(e){busy(false);showError(e);}};
 $('textarea').addEventListener('input',()=>{if(!running){hasResult=false;$('.result').replaceChildren();$('.clear').hidden=true;$('.generate').textContent='按新偏好生成';$('.intro').hidden=false;status('将按当前偏好生成新的筛选结果。');}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shown)close();});chrome.runtime.onMessage.addListener(m=>{if(m.type==='longtalk-toggle')shown?close():open();});
 function syncPage(){

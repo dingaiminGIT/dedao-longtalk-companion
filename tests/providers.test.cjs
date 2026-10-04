@@ -64,3 +64,18 @@ test('overlong summaries select whole existing points using validated indices',a
  let calls=0;const r=await P.analyze(settings(),'key',transcript(),spec,null,()=>{},{validateResult:C.validateResult,fetcher:async(_,init)=>{calls++;const input=JSON.parse(JSON.parse(init.body).messages[1].content);if(input.candidates)return response({indices:[0,2,4,6,8,10,12,14]});const r=summary();r.points=Array.from({length:15},(_,i)=>({...r.points[0],insight:'观点'+i}));return response(r);}});
  assert.equal(calls,2);assert.equal(r.points.length,8);assert.equal(r.points.at(-1).insight,'观点14');C.validateResult(r,transcript().paragraphs);
 });
+test('official DeepSeek 1M models send the entire long transcript without chunk notes',async()=>{
+ const s=P.config({provider:'deepseek',baseUrl:'https://api.deepseek.com/v1',model:'deepseek-flash',chunkChars:16000});
+ const source={...transcript(),paragraphs:Array.from({length:67},(_,i)=>({id:`P${String(i+1).padStart(4,'0')}`,text:'文'.repeat(1000)}))};
+ let calls=0;const progress=[];
+ const r=await P.analyze(s,'key',source,spec,null,m=>progress.push(m),{validateResult:C.validateResult,fetcher:async(_,init)=>{calls++;const input=JSON.parse(JSON.parse(init.body).messages[1].content);assert.equal(input.paragraphs.length,67);assert.equal(input.paragraphs.at(-1).id,'P0067');assert.equal(input.notes,undefined);return response(summary());}});
+ assert.equal(calls,1);assert.ok(progress[0].includes('阅读全文'));C.validateResult(r,source.paragraphs);
+});
+test('full-text selection respects explicit overrides and does not assume unknown endpoints support 1M',()=>{
+ const base={provider:'deepseek',baseUrl:'https://api.deepseek.com/v1',model:'deepseek-flash'};
+ assert.equal(P.usesFullText(P.config(base)),true);
+ assert.equal(P.usesFullText(P.config({...base,model:'deepseek-v4-pro'})),true);
+ for(const change of [{model:'unknown'},{provider:'custom'},{baseUrl:'https://other.example/v1'},{baseUrl:'https://api.deepseek.com/proxy'},{inputMode:'chunks'}])assert.equal(P.usesFullText(P.config({...base,...change})),false);
+ assert.equal(P.usesFullText(P.config({...base,provider:'custom',inputMode:'full'})),true);
+ assert.throws(()=>P.config({...base,inputMode:'invalid'}),/处理方式/);
+});
