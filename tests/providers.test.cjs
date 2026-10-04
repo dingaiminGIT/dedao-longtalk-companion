@@ -25,4 +25,42 @@ test('long input passes through chunk notes and final schema validation',async()
  let calls=0;const progress=[],s={...settings(),chunkChars:4000};const output=await P.analyze(s,'key',transcript(),spec,new AbortController().signal,m=>progress.push(m),{fetcher:async(_,init)=>{calls++;const payload=JSON.parse(init.body),input=JSON.parse(payload.messages[1].content);if(input.paragraphs)return response({notes:[{insight:'观点',reasoning:'论证',example:'具体案例',action:'行动',boundary:'边界',evidence:[input.paragraphs[0].id]}]});assert.equal(input.notes.length,2);assert.equal(input.paragraphs,undefined);return response(summary());}});
  assert.equal(calls,3);C.validateResult(output,transcript().paragraphs);assert.match(progress[0],/1\/2/);assert.match(progress.at(-1),/合并/);
 });
-test('hallucinated chunk references stop analysis before final synthesis',async()=>{let calls=0;await assert.rejects(P.analyze({...settings(),chunkChars:4000},'key',transcript(),spec,null,()=>{},{fetcher:async()=>{calls++;return response({notes:[{insight:'观点',reasoning:'论证',example:'案例',action:'行动',boundary:'边界',evidence:['P9999']}]});}}),/引用异常/);assert.equal(calls,1);});
+test('hallucinated chunk references stop analysis before final synthesis',async()=>{let calls=0;await assert.rejects(P.analyze({...settings(),chunkChars:4000},'key',transcript(),spec,null,()=>{},{fetcher:async()=>{calls++;return response({notes:[{insight:'观点',reasoning:'论证',example:'案例',action:'行动',boundary:'边界',evidence:['P9999']}]});}}),/本段之外的引用/);assert.equal(calls,2);});
+test('DeepSeek reserves the short test response for JSON rather than default thinking',async()=>{
+ const s=P.config({provider:'deepseek',baseUrl:'https://api.deepseek.com/v1',model:'deepseek-flash'});
+ const value=await P.completion(s,'test-key',[{role:'user',content:'只输出 JSON'}],null,{maxTokens:256,fetcher:async(_,init)=>{const body=JSON.parse(init.body);assert.deepEqual(body.thinking,{type:'disabled'});assert.equal(body.max_tokens,256);assert.equal(body.response_format.type,'json_object');return response({ok:true});}});assert.equal(value.ok,true);
+});
+test('missing note fields are retried once and normalized without accepting invented references',async()=>{
+ let calls=0;const s={...settings(),chunkChars:4000};const r=await P.analyze(s,'key',transcript(),spec,null,()=>{},{fetcher:async(_,init)=>{calls++;const messages=JSON.parse(init.body).messages,input=JSON.parse(messages[1].content);if(input.notes)return response(summary());return response({notes:[{insight:'观点',reasoning:'论证',example:calls===1?'':'案例',action:'行动',boundary:'边界',evidence:[input.paragraphs[0].id],extra:'not retained'}]});}});assert.equal(calls,4);C.validateResult(r,transcript().paragraphs);
+});
+
+test('SSE envelope overhead may exceed 2 MB without allowing oversized model content',async()=>{
+ const frame=x=>'data: '+JSON.stringify(x)+'\n\n';
+ const overhead=frame({id:'x'.repeat(300),choices:[{delta:{}}]}).repeat(6500);
+ const end=frame({choices:[{delta:{content:'{"ok":true}'},finish_reason:'stop'}]})+'data: [DONE]\n\n';
+ assert.ok(Buffer.byteLength(overhead+end)>2_000_000);
+ assert.deepEqual(await P.completion(settings(),'key',[],null,{fetcher:async()=>new Response(overhead+end,{headers:{'content-type':'text/event-stream'}})}),{ok:true});
+ const huge=frame({choices:[{delta:{content:'x'.repeat(256001)}}]});
+ await assert.rejects(P.completion(settings(),'key',[],null,{fetcher:async()=>new Response(huge,{headers:{'content-type':'text/event-stream'}})}),/正文过大/);
+});
+
+test('intermediate notes preserve additional valid evidence without weakening citation checks',()=>{
+ const paragraphs=Array.from({length:8},(_,i)=>({id:`P${String(i+1).padStart(4,'0')}`,text:'原文'}));
+ const note={insight:'观点',reasoning:'论证',example:'案例',action:'行动',boundary:'边界',evidence:paragraphs.map(p=>p.id)};
+ const notes=Array.from({length:7},()=>({...note}));assert.equal(P.validateNotes({notes},paragraphs).length,7);assert.equal(P.validateNotes({notes},paragraphs)[0].evidence.length,8);
+ assert.throws(()=>P.validateNotes({notes:[{...note,evidence:['P9999']}]},paragraphs),/本段之外/);
+ assert.throws(()=>P.validateNotes({notes:Array(13).fill(note)},paragraphs),/1～12/);
+});
+
+test('final schema is corrected once without repeating successful transcript chunks',async()=>{
+ let chunks=0,finals=0;
+ const r=await P.analyze({...settings(),chunkChars:4000},'key',transcript(),spec,null,()=>{},{validateResult:C.validateResult,fetcher:async(_,init)=>{
+  const input=JSON.parse(JSON.parse(init.body).messages[1].content);
+  if(input.paragraphs){chunks++;return response({notes:[{insight:'观点',reasoning:'论证',example:'案例',action:'行动',boundary:'边界',evidence:[input.paragraphs[0].id]}]});}
+  finals++;const r=summary();if(finals===1)r.verdict='建议阅读';return response(r);
+ }});assert.equal(chunks,2);assert.equal(finals,2);C.validateResult(r,transcript().paragraphs);
+});
+test('overlong summaries select whole existing points using validated indices',async()=>{
+ let calls=0;const r=await P.analyze(settings(),'key',transcript(),spec,null,()=>{},{validateResult:C.validateResult,fetcher:async(_,init)=>{calls++;const input=JSON.parse(JSON.parse(init.body).messages[1].content);if(input.candidates)return response({indices:[0,2,4,6,8,10,12,14]});const r=summary();r.points=Array.from({length:15},(_,i)=>({...r.points[0],insight:'观点'+i}));return response(r);}});
+ assert.equal(calls,2);assert.equal(r.points.length,8);assert.equal(r.points.at(-1).insight,'观点14');C.validateResult(r,transcript().paragraphs);
+});

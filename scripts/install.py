@@ -16,7 +16,9 @@ def executable(path,node=None):
     if not p.is_file():raise SystemExit('程序路径不存在：'+str(p))
     # Node shims must be resolved without passing model input through cmd.exe.
     if p.suffix.lower() in ('.cmd','.bat'):
-        for candidate in [p.parent/'node_modules/@openai/codex/bin/codex.js',p.parent/'node_modules/@tencent-ai/codebuddy-code/cli.js']:
+        entries={'codex':'@openai/codex/bin/codex.js','codebuddy':'@tencent-ai/codebuddy-code/bin/codebuddy','cbc':'@tencent-ai/codebuddy-code/bin/codebuddy'}
+        relative=entries.get(p.stem.lower())
+        for candidate in ([p.parent/'node_modules'/relative] if relative else []):
             if candidate.is_file():return executable(candidate,node)
         raise SystemExit('请指定实际 .exe 或 JavaScript CLI 入口，不能使用批处理 shim：'+str(p))
     with p.open('rb') as handle:prefix=handle.read(100)
@@ -27,12 +29,15 @@ def executable(path,node=None):
     return [str(p)]
 
 def find_workbuddy():
+    standalone=shutil.which('codebuddy') or shutil.which('cbc')
+    if standalone:return standalone
     if sys.platform=='darwin':
         candidates=[Path('/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy'),Path.home()/'Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy']
     elif sys.platform=='win32':
         candidates=[Path(os.environ.get('LOCALAPPDATA',''))/'Programs/WorkBuddy/resources/app.asar.unpacked/cli/bin/codebuddy',Path(os.environ.get('ProgramFiles','C:/Program Files'))/'WorkBuddy/resources/app.asar.unpacked/cli/bin/codebuddy']
     else:candidates=[]
-    return next((str(p) for p in candidates if p.is_file()),None)
+    # Desktop bundles may omit the standalone login UI; do not auto-select those.
+    return next((str(p) for p in candidates if p.is_file() and (p.parent.parent/'dist/codebuddy.js').is_file()),None)
 
 def install(registries=None,codex=None,workbuddy=None,node=None):
     dest,defaults=locations(sys.platform,Path.home(),os.environ)
@@ -40,8 +45,8 @@ def install(registries=None,codex=None,workbuddy=None,node=None):
     try:programs['workbuddy']=executable(workbuddy or find_workbuddy(),node)
     except SystemExit as error:
         if workbuddy or not programs['codex']:raise
-        print('WorkBuddy 暂未配置：'+str(error))
-    if not any(programs.values()):raise SystemExit('未找到 Codex 或 WorkBuddy 命令行。可先安装工具，或直接使用不需要本机程序的 API 模式。自定义路径使用 --codex / --workbuddy。')
+        print('CodeBuddy CLI 暂未配置：'+str(error))
+    if not any(programs.values()):raise SystemExit('未找到 Codex 或 CodeBuddy CLI。可先安装工具，或直接使用不需要本机程序的 API 模式。自定义路径使用 --codex / --workbuddy。')
     dest.mkdir(parents=True,exist_ok=True);dest.chmod(0o700)
     shutil.copy2(ROOT/'native/host.py',dest/'host.py');shutil.copy2(ROOT/'extension/analysis-spec.json',dest/'analysis-spec.json')
     id=(ROOT/'extension-id.txt').read_text().strip()
@@ -64,7 +69,7 @@ def install(registries=None,codex=None,workbuddy=None,node=None):
         import winreg
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER,'Software\\Google\\Chrome\\NativeMessagingHosts\\'+NAME) as key:winreg.SetValueEx(key,'',0,winreg.REG_SZ,str(path))
     print('程序检测：'+', '.join(name for name,value in programs.items() if value))
-    print('这只确认程序存在；请先完成所选 CLI 的登录。WorkBuddy 桌面登录可能不与 CLI 共享。')
+    print('这只确认程序存在；请先完成所选 CLI 的登录。CodeBuddy CLI 独立登录；不假定共享 WorkBuddy 桌面额度。')
     print('在扩展的「模型设置」选择本机工具。扩展目录：'+str(ROOT/'extension'))
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--registry-dir',action='append',type=Path)

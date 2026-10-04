@@ -71,7 +71,7 @@ chrome.runtime.onConnect.addListener(ui=>{
   try{
    await apiReady(task.config);const secret=await apiKey(task.config);
    const spec=await (await fetch(chrome.runtime.getURL('analysis-spec.json'))).json();
-   const result=await P.analyze(task.config,secret,task.source,spec,task.controller.signal,message=>{if(job===task)post({type:'progress',message});});
+   const result=await P.analyze(task.config,secret,task.source,spec,task.controller.signal,message=>{if(job===task)post({type:'progress',message});},{validateResult:C.validateResult});
    await completed(task,result,Math.round((Date.now()-start)/100)/10);
   }catch(e){if(job===task){job=null;post({type:'error',message:task.controller.signal.aborted?'生成超过 10 分钟，已停止。可调整分段大小或更换模型。':e.message});}}
   finally{clearTimeout(deadline);clearInterval(heartbeat);}

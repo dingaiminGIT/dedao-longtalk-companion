@@ -28,11 +28,20 @@ function source(value){
 }
 function validateResult(r,paragraphs){
  const text=x=>typeof x==='string'&&x.length>0&&x.length<=1000;
- if(!r||!text(r.summary)||!text(r.reason)||!['精选段落','完整观看','暂时跳过'].includes(r.verdict)||!Array.isArray(r.dimensions)||r.dimensions.length!==3||!Array.isArray(r.points)||(r.points.length<5||r.points.length>8)||!Array.isArray(r.limitations)||r.limitations.length>8||!r.limitations.every(text))throw Error('摘要结构不完整，请重新生成');
+ if(!r||!text(r.summary)||!text(r.reason)||!['精选段落','完整观看','暂时跳过'].includes(r.verdict))throw Error('摘要概览、建议或理由缺失、过长或格式不正确');
+ if(!Array.isArray(r.dimensions)||r.dimensions.length!==3)throw Error('摘要须包含 3 个评估维度');
+ if(!Array.isArray(r.points)||r.points.length<5||r.points.length>12)throw Error('摘要须包含 5～12 个重点');
+ if(!Array.isArray(r.limitations)||r.limitations.length>8||!r.limitations.every(text))throw Error('摘要局限须为不超过 8 项的非空字符串数组');
  const names=['观点启发','具体案例','行动指导'];
  if(new Set(r.dimensions.map(x=>x.name)).size!==3||r.dimensions.some(x=>!names.includes(x.name)||!['较强','一般','较弱'].includes(x.level)||!text(x.reason)))throw Error('摘要维度异常');
  const ids=new Set(paragraphs.map(p=>p.id));
- if(r.points.some(x=>![x.insight,x.speaker,x.reasoning,x.example,x.action,x.boundary].every(text)||!['嘉宾建议','由观点延伸','无明确行动'].includes(x.actionOrigin)||!Array.isArray(x.evidence)||x.evidence.length<1||x.evidence.length>4||x.evidence.some(id=>!ids.has(id))))throw Error('原文引用无效，请重新生成');
+ for(const [i,x] of r.points.entries()){
+  if(!x||typeof x!=='object')throw Error(`第 ${i+1} 个重点格式错误`);
+  for(const k of ['insight','speaker','reasoning','example','action','boundary'])if(!text(x[k]))throw Error(`第 ${i+1} 个重点的 ${k} 须为 1～1000 字的字符串`);
+  if(!['嘉宾建议','由观点延伸','无明确行动'].includes(x.actionOrigin))throw Error(`第 ${i+1} 个重点的 actionOrigin 只能为嘉宾建议/由观点延伸/无明确行动`);
+  if(!Array.isArray(x.evidence)||x.evidence.length<1||x.evidence.length>4)throw Error(`第 ${i+1} 个重点的 evidence 须包含 1～4 个原文引用`);
+  if(x.evidence.some(id=>!ids.has(id)))throw Error(`第 ${i+1} 个重点包含不存在的原文引用`);
+ }
  return r;
 }
 async function digest(value){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}

@@ -18,12 +18,12 @@ class Tests(unittest.TestCase):
   r=result();r['injected']='unexpected'
   with self.assertRaises(ValueError):h.validate_result(r,source())
  def test_detailed_schema_requires_reasoning_and_boundary(self):
-  for count in [5,8]:
+  for count in [5,8,12]:
    r=result();r['points']=[dict(r['points'][0]) for _ in range(count)];h.validate_result(r,source())
   for field in ['reasoning','boundary']:
    r=result();del r['points'][0][field]
    with self.assertRaises(ValueError):h.validate_result(r,source())
-  for count in [4,9]:
+  for count in [4,13]:
    r=result();r['points']=[dict(r['points'][0]) for _ in range(count)]
    with self.assertRaises(ValueError):h.validate_result(r,source())
  def test_fixed_command_no_source_as_shell(self):
@@ -49,6 +49,14 @@ class Tests(unittest.TestCase):
    while host.process is None and time.monotonic()<deadline:time.sleep(.01)
    self.assertIsNotNone(host.process);child=host.process;host.stop();host.worker.join(10)
    self.assertFalse(host.worker.is_alive());self.assertIsNotNone(child.poll());self.assertEqual(events[-1]['type'],'cancelled');self.assertNotIn('result',[e['type'] for e in events])
+ def test_timeout_reports_an_error_instead_of_user_cancellation(self):
+  from unittest.mock import MagicMock,patch
+  process=MagicMock();process.communicate.side_effect=[h.subprocess.TimeoutExpired('codebuddy',300),('', '')]
+  instance=h.Host({'workbuddy':['/bin/node','/app/codebuddy']});events=[];instance.send=events.append
+  with patch.object(h.subprocess,'Popen',return_value=process),patch.object(h,'kill_process') as kill:
+   instance.run('timeout',source(),'workbuddy')
+  kill.assert_called_once_with(process);self.assertEqual(events[-1]['type'],'error');self.assertIn('超过 5 分钟',events[-1]['message']);self.assertFalse(instance.cancel.is_set())
+
  def test_tool_events_are_rejected(self):
   with tempfile.TemporaryDirectory() as d:
    host=h.Host({'codex':str(self.fake(d,tool=True))});events=[];host.send=events.append
@@ -60,11 +68,15 @@ if __name__=='__main__':unittest.main()
 class ProviderTests(unittest.TestCase):
  def test_workbuddy_argv_has_no_tools_or_permission_bypass(self):
   cmd=h.provider_command({'workbuddy':['/bin/node','/app/codebuddy']},'workbuddy',Path('/tmp/test'),'model-name')
-  self.assertEqual(cmd[:2],['/bin/node','/app/codebuddy']);self.assertEqual(cmd[cmd.index('--tools')+1],'');self.assertIn('--strict-mcp-config',cmd);self.assertIn('--no-session-persistence',cmd);self.assertNotIn('-y',cmd)
+  self.assertEqual(cmd[:2],['/bin/node','/app/codebuddy']);self.assertEqual(cmd[cmd.index('--tools')+1],'');self.assertIn('--strict-mcp-config',cmd);self.assertIn('--no-session-persistence',cmd);self.assertNotIn('-y',cmd);self.assertEqual(cmd[cmd.index('--effort')+1],'medium');self.assertEqual(cmd[cmd.index('--output-format')+1],'stream-json');self.assertNotIn('--json-schema',cmd);self.assertIn('必须符合结构',cmd[cmd.index('--system-prompt')+1])
  def test_workbuddy_parses_structured_result_and_reports_login(self):
   self.assertEqual(h.workbuddy_result(json.dumps({'type':'result','structured_output':result()}),''),result())
+  self.assertEqual(h.workbuddy_result(json.dumps({'type':'message','content':'input'})+'\n'+json.dumps({'type':'result','result':json.dumps(result())}),''),result())
   with self.assertRaisesRegex(RuntimeError,'/login'):h.workbuddy_result('Authentication required. Please use /login','')
   with self.assertRaisesRegex(ValueError,'额外操作'):h.workbuddy_result(json.dumps([{'type':'assistant','message':{'content':[{'type':'tool_use'}]}}]),'')
+  for event in [{'type':'function_call'},{'type':'message','content':[{'type':'tool_use'}]}]:
+   with self.assertRaisesRegex(ValueError,'额外操作'):h.workbuddy_result(json.dumps([event]),'')
+  self.assertEqual(h.workbuddy_result(json.dumps({'type':'result','result':'```json\n'+json.dumps(result())+'\n```'}),''),result())
  def test_provider_and_model_cannot_inject_flags(self):
   host=h.Host({})
   for change in [{'provider':'arbitrary'},{'model':'x --tools shell'},{'model':'x\n-y'}]:
@@ -80,3 +92,19 @@ class InstallerTests(unittest.TestCase):
   self.assertIn('Library/Application Support',str(module.locations('darwin',home,{})[0]))
   self.assertEqual(module.locations('win32',home,{'LOCALAPPDATA':'/local'})[0],Path('/local/DedaoLongtalk/host'))
   self.assertEqual(module.locations('linux',home,{'XDG_CONFIG_HOME':'/config'})[1],[Path('/config/google-chrome/NativeMessagingHosts')])
+
+class InstallerStandaloneTests(unittest.TestCase):
+ def test_prefers_standalone_cli_over_desktop_bundle(self):
+  from unittest.mock import patch
+  spec=importlib.util.spec_from_file_location('installer_cli',Path(__file__).resolve().parents[1]/'scripts/install.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  with patch.object(module.shutil,'which',side_effect=lambda name:'/usr/local/bin/codebuddy' if name=='codebuddy' else None):
+   self.assertEqual(module.find_workbuddy(),'/usr/local/bin/codebuddy')
+
+ def test_windows_shim_selects_its_own_package_when_both_are_installed(self):
+  spec=importlib.util.spec_from_file_location('installer_shim',Path(__file__).resolve().parents[1]/'scripts/install.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);node=root/'node.exe';node.touch()
+   for entry in ['@openai/codex/bin/codex.js','@tencent-ai/codebuddy-code/bin/codebuddy']:
+    p=root/'node_modules'/entry;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('#!/usr/bin/env node\n')
+   shim=root/'codebuddy.cmd';shim.touch()
+   self.assertEqual(module.executable(shim,str(node)),[str(node),str(root/'node_modules/@tencent-ai/codebuddy-code/bin/codebuddy')])
