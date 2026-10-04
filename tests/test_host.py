@@ -51,11 +51,11 @@ class Tests(unittest.TestCase):
    self.assertFalse(host.worker.is_alive());self.assertIsNotNone(child.poll());self.assertEqual(events[-1]['type'],'cancelled');self.assertNotIn('result',[e['type'] for e in events])
  def test_timeout_reports_an_error_instead_of_user_cancellation(self):
   from unittest.mock import MagicMock,patch
-  process=MagicMock();process.communicate.side_effect=[h.subprocess.TimeoutExpired('codebuddy',300),('', '')]
+  process=MagicMock();process.communicate.side_effect=[h.subprocess.TimeoutExpired('codebuddy',h.GENERATION_TIMEOUT_SECONDS),('', '')]
   instance=h.Host({'workbuddy':['/bin/node','/app/codebuddy']});events=[];instance.send=events.append
   with patch.object(h.subprocess,'Popen',return_value=process),patch.object(h,'kill_process') as kill:
    instance.run('timeout',source(),'workbuddy')
-  kill.assert_called_once_with(process);self.assertEqual(events[-1]['type'],'error');self.assertIn('超过 5 分钟',events[-1]['message']);self.assertFalse(instance.cancel.is_set())
+  kill.assert_called_once_with(process);self.assertEqual(events[-1]['type'],'error');self.assertIn('超过 15 分钟',events[-1]['message']);self.assertEqual(process.communicate.call_args_list[0].kwargs['timeout'],900);self.assertFalse(instance.cancel.is_set())
 
  def test_tool_events_are_rejected(self):
   with tempfile.TemporaryDirectory() as d:

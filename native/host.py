@@ -7,6 +7,7 @@ NAME='com.baiyalab.dedao_longtalk'
 VERSION='3.0'
 RESULT_VERSION='2'
 MAX_FRAME=2_000_000
+GENERATION_TIMEOUT_SECONDS=15*60
 ROOT=Path(__file__).resolve().parent
 
 def validate_source(value):
@@ -133,13 +134,13 @@ class Host:
                 launch={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP} if os.name=='nt' else {'start_new_session':True}
                 self.process=subprocess.Popen(provider_command(self.config,provider,tmp,model),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',cwd=tmp,env=env,**launch)
                 if self.cancel.is_set():self.stop()
-                try:out,err=self.process.communicate(PROMPT+json.dumps(source,ensure_ascii=False),timeout=300)
+                try:out,err=self.process.communicate(PROMPT+json.dumps(source,ensure_ascii=False),timeout=GENERATION_TIMEOUT_SECONDS)
                 except subprocess.TimeoutExpired:
                     kill_process(self.process)
                     try:self.process.communicate(timeout=5)
                     except subprocess.TimeoutExpired:
                         kill_process(self.process,True);self.process.communicate()
-                    raise TimeoutError('生成超过 5 分钟，已停止；可稍后重试')
+                    raise TimeoutError('生成超过 15 分钟，已停止；不会自动续跑。请重新生成，或在模型设置中改用更快的模型。')
                 if self.cancel.is_set():self.send({'type':'cancelled','id':id});return
                 if self.process.returncode:raise RuntimeError(friendly_error(out+err,provider))
                 if provider=='codex' and not (tmp/'result.json').exists():raise RuntimeError(friendly_error(out+err,provider))

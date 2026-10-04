@@ -1,4 +1,4 @@
-# 得到长谈速览 0.3.2
+# 得到长谈速览 0.3.3
 
 给得到长谈文字稿生成便于筛选的速览：内容概览、观点启发 / 具体案例 / 行动指导三个维度、通常 5～8 个、最多 12 个重点详解与原文入口。默认偏好是“有新观点、有具体案例，能指导行动”，可修改。
 
@@ -6,7 +6,7 @@
 
 ## 分享与安装
 
-把 `dedao-longtalk-0.3.2.zip` 发给对方即可，不包含你的登录信息、API Key、文章或私人摘要。解压后保留目录，在桌面 Chrome 的 `chrome://extensions/` 开启开发者模式，点击“加载已解压的扩展程序”，选择 **extension** 文件夹。需要 Chrome 116 或更新版本。
+把 `dedao-longtalk-0.3.3.zip` 发给对方即可，不包含你的登录信息、API Key、文章或私人摘要。解压后保留目录，在桌面 Chrome 的 `chrome://extensions/` 开启开发者模式，点击“加载已解压的扩展程序”，选择 **extension** 文件夹。需要 Chrome 116 或更新版本。
 
 扩展本身不限定 macOS。Windows、macOS、Linux 使用同一份扩展。首次使用默认 API 模式；从旧版升级会保留本机 Codex 模式。
 
@@ -23,7 +23,7 @@
 ### API 模式
 
 1. 选择 OpenAI、DeepSeek 或“自定义 OpenAI 兼容服务”。
-2. 填写 Base URL（如 `https://api.example.com/v1`），不要附加 `/chat/completions`；填写该服务商的模型 ID 和 API Key。
+2. 填写 Base URL（如 `https://api.example.com/v1`），不要附加 `/chat/completions`；填写该服务商的模型 ID 和 API Key。DeepSeek 官方 API 可填 `deepseek-flash`，选择 DeepSeek 时会自动填入；这与 CodeBuddy CLI 中的 `deepseek-v4.1-flash` 是两个不同的模型 ID。
 3. 保存，并允许扩展访问所选 API 网站。可点击“测试 API 与模型”，发送一条极短测试消息，可能产生少量费用。
 4. 回到文章页，点击“生成速览”。
 
@@ -54,7 +54,7 @@ Windows 的 npm `.cmd` shim 会尝试解析为实际 JS 入口；无法解析时
 
 Codex 登录运行 `codex login`。CodeBuddy CLI 登录运行 `codebuddy` 并按登录提示操作，后续可用 `/login`。它是独立的命令行产品，不假定自动继承 WorkBuddy 桌面端的登录或额度。设置中内部保留 `workbuddy` 标识以兼容旧配置；实际接入名称会明确显示 CodeBuddy CLI。
 
-“检测本机程序”只验证连接程序和可执行文件存在；登录、额度、模型是否可用以实际生成为准。本机任务最多 5 分钟。CodeBuddy CLI 已验证模型 `deepseek-v4.1-flash`（在模型名称里填写）；CLI 默认的 Hy4 在本次长稿测试中超时，较慢模型可改用该模型。插件不会静默切换模型。
+“检测本机程序”只验证连接程序和可执行文件存在；登录、额度、模型是否可用以实际生成为准。本机任务最多 15 分钟，可随时取消；超时会结束当前任务，需要重新生成，不能断点续跑。CodeBuddy CLI 已验证模型 `deepseek-v4.1-flash`（在模型名称里填写）；CLI 默认的 Hy4 在本次长稿测试中超时，较慢模型可改用该模型。插件不会静默切换模型。
 
 安装位置：macOS 为 `~/Library/Application Support/DedaoLongtalk/host`，Linux 为 `~/.local/share/dedao-longtalk/host`，Windows 为 `%LOCALAPPDATA%\DedaoLongtalk\host`。Chrome 的注册方式遵循 [Native Messaging 文档](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)。其他 Chromium 浏览器需另注册对应目录，可用 `--registry-dir` 指定。
 
