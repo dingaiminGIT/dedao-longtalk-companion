@@ -4,6 +4,8 @@
 
 独立项目，非得到官方产品。与知识红包插件、Android 项目分别维护。
 
+[下载最新安装包](https://github.com/dingaiminGIT/dedao-longtalk-companion/releases/latest) · [作品介绍](https://baiyalab.com/projects/dedao-longtalk-companion) · [安装与使用教程](https://baiyalab.com/notes/dedao-longtalk-companion) · [反馈问题](https://github.com/dingaiminGIT/dedao-longtalk-companion/issues)
+
 ## 分享与安装
 
 把 `dedao-longtalk-0.3.4.zip` 发给对方即可，不包含你的登录信息、API Key、文章或私人摘要。解压后保留目录，在桌面 Chrome 的 `chrome://extensions/` 开启开发者模式，点击“加载已解压的扩展程序”，选择 **extension** 文件夹。需要 Chrome 116 或更新版本。
@@ -31,7 +33,7 @@
 
 Key 保存在当前浏览器的本机扩展存储中，不通过 Chrome 账号同步、不交给得到网页。保存一次后，重启浏览器、更新或重新加载扩展仍可使用。不同 Base URL 分别保存 Key，切换回来可继续使用；不会把另一个地址的 Key 发给新地址。设置页可以清除当前服务的 Key，卸载扩展也会清除。旧版会话 Key 若已因重载而丢失，需要在新版补存一次。
 
-长文默认自动选择处理方式：DeepSeek 官方 API 的 `deepseek-flash`、`deepseek-v4-pro` 及官方 Flash 别名支持 1M tokens 上下文，在插件支持的 18 万字符正文范围内直接阅读全文；其他未识别模型默认每约 1.6 万字符分段整理后合并。可在“长文本与兼容设置”手动选择“阅读全文”或“分段整理后合并”。字符数不等于 token 数，支持上限以[官方模型文档](https://api-docs.deepseek.com/quick_start/pricing)为准。全文模式不做分段摘记，但必要的格式修正或主题精选仍可能增加调用次数。默认输出上限为 16384 tokens，避免详细中文速览被截断；设置页可调整单段大小、输出上限和 JSON 模式。分段摘记会保留额外的真实引用；格式不合格时自动修正一次，不接受不存在的引用。合并结果超过 12 个主题时，会根据偏好精选 5～8 个完整主题，再逐条校验；不会直接截断正文。模型须有足够上下文及中文输出能力；只保证结构与引用合法，不保证每个服务商输出质量相同。API 任务最多运行 10 分钟，可随时取消。 后台空闲休眠不会清除配置或已生成的结果，下次操作自动连接；生成中断时会明确提示重试，不会自动重复提交付费请求。扩展更新后请刷新已打开的文章页。
+长文默认自动选择处理方式：DeepSeek 官方 API 的 `deepseek-flash`、`deepseek-v4-pro` 及官方 Flash 别名支持 1M tokens 上下文，在插件支持的 18 万字符正文范围内直接阅读全文；其他未识别模型默认每约 1.6 万字符分段整理后合并。可在“长文本与兼容设置”手动选择“阅读全文”或“分段整理后合并”。字符数不等于 token 数，支持上限以[官方模型文档](https://api-docs.deepseek.com/quick_start/pricing)为准。全文模式不做分段摘记，但必要的格式修正或主题精选仍可能增加调用次数。默认输出上限为 16384 tokens，避免详细中文速览被截断；设置页可调整单段大小、输出上限和 JSON 模式。分段摘记会保留额外的真实引用；格式不合格时自动修正一次，不接受不存在的引用。合并结果超过 12 个主题时，会根据偏好精选 5～8 个完整主题，再逐条校验；不会直接截断正文。模型须有足够上下文及中文输出能力；只保证结构与引用合法，不保证每个服务商输出质量相同。API 任务最多运行 10 分钟，可随时取消。后台空闲休眠不会清除配置或已生成的结果，下次操作自动连接；生成中断时会明确提示重试，不会自动重复提交付费请求。扩展更新后请刷新已打开的文章页。
 
 ### 本机 Codex / CodeBuddy CLI
 
@@ -75,6 +77,8 @@ Codex 登录运行 `codex login`。CodeBuddy CLI 登录运行 `codebuddy` 并按
 在 Chrome 扩展管理页移除扩展会清除本机扩展数据。要卸载本机连接程序，删除上述 `DedaoLongtalk/host` 目录，以及 Chrome 的 `NativeMessagingHosts/com.baiyalab.dedao_longtalk.json`；Windows 还需删除当前用户注册表 `Software\Google\Chrome\NativeMessagingHosts\com.baiyalab.dedao_longtalk`。不会删除 Codex、CodeBuddy CLI 或其登录信息。
 
 ## 限制与验证
+
+0.3.4 已通过 48 项 JavaScript 与 17 项 Python 测试。DeepSeek 全文模式实测约 6.4 万字，32 秒生成 8 个重点；Ego 实测后台空闲断开后保留结果、按需重连。
 
 需要用户自己有文章全文访问权限；缺少全文稿、超过 18 万字符或页面结构不匹配时不生成。2026-10-04 在 macOS 上使用 969 段、约 6.4 万字的真实长谈稿验证：DeepSeek API（`deepseek-flash`）从插件按钮到结果展示通过，55.1 秒生成 11 个重点；CodeBuddy CLI 2.161.2（`deepseek-v4.1-flash`）完整稿生成与结构、引用校验通过，76.1 秒生成 10 个重点；再从插件按钮实际调用本机连接程序，114.3 秒生成 9 个重点并正常展示。耗时和内容会随模型及服务负载变化。Codex 本机模式也已实测。
 
